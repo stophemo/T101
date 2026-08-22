@@ -93,6 +93,18 @@
   .ban-slot .nm { font-size: 11px; color: var(--text); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ban-slot .order { position: absolute; top: 4px; left: 6px; font-size: 10px; color: var(--dim); }
 
+  /* 好友卡片 */
+  .fr-card { background: var(--card2); border: 1px solid var(--border); border-radius: 12px; padding: 14px; text-align: center; position: relative; }
+  .fr-card.good { border-color: rgba(74,222,128,.45); }
+  .fr-card.mid { border-color: rgba(251,191,36,.35); }
+  .fr-card.bad { border-color: rgba(248,113,113,.4); }
+  .fr-card .avatar { width: 52px; height: 52px; border-radius: 50%; margin-bottom: 8px; border: 2px solid var(--border); }
+  .fr-card .nm { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fr-card .st { font-size: 11px; margin-top: 2px; }
+  .fr-status-chat { color: var(--green); } .fr-status-away { color: var(--gold); } .fr-status-mobile { color: var(--cyan); } .fr-status-dnd { color: var(--red); }
+  .fr-card .meta { font-size: 11px; color: var(--dim); margin-top: 4px; line-height: 1.5; }
+  .fr-card .rec { font-size: 12px; font-weight: 700; margin-top: 6px; }
+
   /* 选人轮次条：B1B2→R1R2R3→B3B4→R4R5→B5 */
   .rounds { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .round { font-size: 12px; color: var(--dim); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; background: rgba(255,255,255,.02); }
@@ -165,6 +177,7 @@
 
   <nav id="tabs">
     <button data-tab="bp" class="active">🎮 对局</button>
+    <button data-tab="friends">👥 好友</button>
     <button data-tab="hex">🃏 海克斯大乱斗</button>
     <button data-tab="pick">⚔ Pick 推荐</button>
     <button data-tab="ban">🛡 Ban 建议</button>
@@ -204,6 +217,7 @@
     <div class="card hidden" id="stLobby">
       <h3>👥 队伍房间 <span class="hint" id="stLobbyHint"></span></h3>
       <div class="board" id="stLobbyBoard"></div>
+      <div class="card" style="margin:14px 0 0;border-color:rgba(11,198,227,.2)" id="stTeamEval"></div>
     </div>
 
     <!-- ③ 禁用阶段（排位）：10 人同时 ban，蓝 5 + 红 5 -->
@@ -267,6 +281,21 @@
       <div class="chips" id="augCand" style="margin-bottom:8px"></div>
       <div class="chips" id="augPicked"></div>
       <div class="grid" id="augResults" style="margin-top:10px"></div>
+    </div>
+  </section>
+
+  <!-- ===== 好友状态（在线好友近期战绩 + 组队建议） ===== -->
+  <section class="tab" id="tab-friends">
+    <div class="card">
+      <h3>👥 在线好友状态 <span class="hint">近期 10 场战绩 + 组队建议 · 30s 自动刷新</span></h3>
+      <div class="msg" id="frMsg">正在检测…</div>
+      <div id="frBody" class="hidden">
+        <div class="row" style="margin-bottom:10px;gap:10px">
+          <button class="primary" onclick="loadFriends(true)">🔄 刷新</button>
+          <span class="sub" id="frInfo"></span>
+        </div>
+        <div class="grid" id="frList"></div>
+      </div>
     </div>
   </section>
 
@@ -526,6 +555,24 @@ function hexPoolCard(h) {
 
 /* ---------- 对局主视图：按真实流程阶段驱动（房间→禁用→选人→加载→游戏） ---------- */
 const STAGE_ORDER = ['room', 'ban', 'pick', 'load', 'game'];
+/** 流程条按模式区分：排位有禁用，海斗无禁用（翻牌替代） */
+const FLOWS = {
+  normal: [['room', '1 房间'], ['ban', '2 禁用'], ['pick', '3 选人'], ['load', '4 加载'], ['game', '5 游戏']],
+  hex: [['room', '1 房间'], ['flip', '2 翻牌'], ['load', '3 加载'], ['game', '4 游戏']],
+};
+let flowKey = 'normal';
+function setFlow(key, stageKey) {
+  flowKey = FLOWS[key] ? key : 'normal';
+  const flow = FLOWS[flowKey];
+  const curIdx = flow.findIndex(([k]) => k === stageKey);
+  $('stFlow').innerHTML = flow.map(([k, label], i) => {
+    const cls = [];
+    if (curIdx >= 0 && i < curIdx) cls.push('done');
+    if (i === curIdx) cls.push('cur');
+    return `<span class="fp ${cls.join(' ')}">${label}</span>${i < flow.length - 1 ? '<i>›</i>' : ''}`;
+  }).join('');
+}
+
 function showStage(stage) {
   $('stIdle').classList.toggle('hidden', stage !== 'idle');
   $('stLobby').classList.toggle('hidden', stage !== 'lobby');
@@ -534,15 +581,6 @@ function showStage(stage) {
   $('stHex').classList.toggle('hidden', stage !== 'hex');
   $('stLoading').classList.toggle('hidden', stage !== 'loading');
   $('stGame').classList.toggle('hidden', stage !== 'game');
-  const map = { lobby: 'room', ban: 'ban', pick: 'pick', hex: 'pick', loading: 'load', game: 'game' };
-  const cur = map[stage];
-  if (cur) {
-    document.querySelectorAll('#stFlow .fp').forEach((el) => {
-      const f = el.dataset.fp;
-      el.classList.toggle('done', cur !== 'room' && STAGE_ORDER.indexOf(f) < STAGE_ORDER.indexOf(cur));
-      el.classList.toggle('cur', f === cur);
-    });
-  }
 }
 
 /** ban 大槽位（蓝 5 + 红 5） */
@@ -574,19 +612,35 @@ async function renderIdle() {
   $('stTurn').textContent = '';
 }
 
-async function renderLobby() {
-  const d = await api('lobby');
-  showStage('lobby');
-  $('stPhase').textContent = '👥 队伍房间';
-  $('stMode').textContent = d.modeLabel ? `模式: ${d.modeLabel}` : '';
-  $('stTimer').textContent = '';
-  $('stTurn').textContent = `${d.members.length}/5 人已就位`;
-  $('stLobbyHint').textContent = d.modeLabel ? `${d.modeLabel} · 接受对局后队友已进入房间` : '接受对局后队友已进入房间';
-  $('stLobbyBoard').innerHTML = d.members.map((m) => `<div class="slot ${m.isMe ? 'me' : ''}">
+/** 房间队友卡片（含近期状态） */
+function lobbyCard(m) {
+  const v = m.stats;
+  const color = v ? (v.score >= 60 ? 'var(--green)' : v.score >= 45 ? 'var(--gold)' : 'var(--red)') : 'var(--dim)';
+  return `<div class="slot ${m.isMe ? 'me' : ''}">
     <img src="${m.icon ? `https://game.gtimg.cn/images/lol/act/img/profileicon/${m.icon}.png` : ''}" onerror="this.style.visibility='hidden'">
     <div class="nm">${esc(m.name)}${m.isMe ? ' (我)' : ''}</div>
     <div class="ln">Lv.${m.level ?? '-'}</div>
-  </div>`).join('');
+    ${v
+      ? `<div class="ln" style="color:${color};font-size:10px">${v.verdict} ${v.winRate}% · KDA ${v.kda}${v.modeGames >= 2 ? `<br>本模式 ${v.modeWinRate}%(${v.modeGames}场)` : ''}</div>`
+      : '<div class="ln" style="font-size:10px">近期战绩不可用</div>'}
+  </div>`;
+}
+
+async function renderLobby() {
+  const d = await api('lobby');
+  showStage('lobby');
+  setFlow(d.mode === 'hextech_aram' ? 'hex' : 'normal', 'room');
+  $('stPhase').textContent = '👥 队伍房间';
+  $('stMode').textContent = `模式: ${d.modeLabel}`;
+  $('stTimer').textContent = '';
+  $('stTurn').textContent = `${d.members.length}/5 人已就位`;
+  $('stLobbyHint').textContent = `${d.modeLabel} · 接受对局后队友已进入房间 · 近期战绩 10 场评估`;
+  $('stLobbyBoard').innerHTML = d.members.map(lobbyCard).join('');
+  const t = d.team;
+  $('stTeamEval').innerHTML = t
+    ? `<h3>🧭 队伍状态评估</h3>
+       <div class="sub" style="margin-top:6px">${t.verdict} · 平均分 <b style="color:var(--gold)">${t.avgScore}</b>${t.best ? ` · 状态最好: <b style="color:var(--green)">${esc(t.best)}</b>` : ''}${t.worst ? ` · 需留意: <b style="color:var(--red)">${esc(t.worst)}</b>` : ''}</div>`
+    : '';
 }
 
 async function renderChampSelect() {
@@ -603,8 +657,9 @@ async function renderChampSelect() {
   const isRanked = d.mode === 'ranked_solo' || d.mode === 'ranked_flex';
   const isHex = d.mode === 'hextech_aram';
   if (isHex) {
-    // 海斗：翻牌 + 共享池推荐
+    // 海斗：翻牌 + 共享池推荐（流程条无禁用）
     showStage('hex');
+    setFlow('hex', 'flip');
     $('stHexBoard').innerHTML = d.myTeamBoard.map((p) => hexFlipHTML(p, d)).join('');
     const pool = d.aramPool || [];
     $('stHexPool').innerHTML = pool.length
@@ -616,6 +671,7 @@ async function renderChampSelect() {
   const banTotal = Math.min(10, d.totalActions);
   if (d.totalActions > 0 && d.completedActions < banTotal) {
     showStage('ban');
+    setFlow('normal', 'ban');
     $('stMyBans').innerHTML = banSlotGrid(d.myBans, d);
     $('stEnemyBans').innerHTML = banSlotGrid(d.enemyBans, d);
     $('stBans').innerHTML = d.bans.length
@@ -624,6 +680,7 @@ async function renderChampSelect() {
     return;
   }
   showStage('pick');
+  setFlow('normal', 'pick');
   const pickDone = Math.max(0, d.completedActions - banTotal);
   $('stRounds').innerHTML = PICK_ROUNDS.map((r) => {
     const cls = [r.team];
@@ -644,7 +701,9 @@ async function renderLoading() {
   $('stMode').textContent = '';
   $('stTimer').textContent = '';
   $('stTurn').textContent = '10 名玩家信息 · 进度条满即进入对局';
-  await loadLoading(true);
+  const d = await loadLoading(true);
+  // 流程条按模式：ARAM 系无禁用
+  setFlow(String(d?.gameMode || '').includes('ARAM') ? 'hex' : 'normal', 'load');
 }
 
 async function renderGame() {
@@ -831,8 +890,7 @@ async function loadLoading(force = false) {
   try {
     const d = await api('loading');
     $('stLoadMsg').classList.add('hidden');
-    $('stLoadingBody').classList.remove('hidden');
-    const teams = [100, 200];
+    $('stLoadingBody').classList.remove('hidden');    const teams = [100, 200];
     $('stLoadingBody').innerHTML = `<div class="sub" style="margin-bottom:8px">模式: ${esc(d.gameMode)} · 加载中…</div>` +
       teams.map((team, ti) => {
         const ps = d.players.filter((p) => p.teamId === team);
@@ -847,17 +905,61 @@ async function loadLoading(force = false) {
           <td class="num">${p.summonerLevel ?? '-'}</td>
         </tr>`).join('')}</tbody></table>`;
       }).join('');
+    return d;
   } catch (e) {
     $('stLoadMsg').textContent = e.message === 'NOT_IN_GAME' ? '⏳ 不在对局中' : '❌ ' + e.message;
     $('stLoadMsg').classList.remove('hidden');
     $('stLoadingBody').classList.add('hidden');
+    return null;
   }
+}
+
+/* ---------- 在线好友状态（近期战绩 + 组队建议） ---------- */
+let frTimer = null;
+const FR_STATUS = { chat: '🟢 在线', away: '🟡 离开', mobile: '📱 移动端', dnd: '🔴 勿扰', unknown: '⚪ 未知' };
+function frCard(f) {
+  const v = f.stats;
+  const border = v ? (v.score >= 60 ? 'good' : v.score >= 50 ? 'mid' : 'bad') : 'mid';
+  const rec = v ? (v.score >= 60 ? '🟢 适合组队' : v.score >= 50 ? '🟡 看情况' : '🔴 谨慎组队') : '—';
+  return `<div class="fr-card ${border}">
+    <img class="avatar" src="${f.icon ? `https://game.gtimg.cn/images/lol/act/img/profileicon/${f.icon}.png` : ''}" onerror="this.style.visibility='hidden'">
+    <div class="nm">${esc(f.name)}</div>
+    <div class="st fr-status-${f.status}">${FR_STATUS[f.status] || '⚪'}</div>
+    <div class="meta">${[f.tier, f.level ? `Lv.${f.level}` : ''].filter(Boolean).join(' · ') || '段位未知'}</div>
+    ${v
+      ? `<div class="meta">近10场 ${v.winRate.toFixed(0)}% · KDA ${v.kda}</div>
+         <div class="rec" style="color:${v.score >= 60 ? 'var(--green)' : v.score >= 50 ? 'var(--gold)' : 'var(--red)'}">${v.verdict}（${v.score}分）</div>
+         <div class="rec">${rec}</div>`
+      : '<div class="meta">近期战绩不可用</div>'}
+  </div>`;
+}
+async function loadFriends(force = false) {
+  if (!force && !$('autoRefresh').checked) return;
+  try {
+    const d = await api('friends');
+    $('frMsg').classList.add('hidden');
+    $('frBody').classList.remove('hidden');
+    $('frInfo').textContent = `${d.count} 位在线好友 · 按状态分排序`;
+    $('frList').innerHTML = d.friends.length
+      ? d.friends.map(frCard).join('')
+      : '<div class="msg">当前没有在线好友</div>';
+  } catch (e) {
+    $('frMsg').textContent = '❌ ' + e.message;
+    $('frMsg').classList.remove('hidden');
+    $('frBody').classList.add('hidden');
+  }
+}
+function startFriends() {
+  loadFriends(true);
+  if (frTimer) clearInterval(frTimer);
+  frTimer = setInterval(() => loadFriends(), 30000);
 }
 
 /* ---------- init ---------- */
 setInterval(lcuStatus, 3000);
 lcuStatus();
 startStage();
+startFriends();
 renderAugPicked();
 document.querySelector('#rankLane').addEventListener('change', loadRank);
 document.querySelector('#rankTier').addEventListener('change', loadRank);

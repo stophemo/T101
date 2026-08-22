@@ -5,6 +5,7 @@ import { computeBanRecommendations } from '../src/services/ban.js';
 import { computePickRecommendations, inferLane, normalizeLane } from '../src/services/pick.js';
 import { buildAramPool } from '../src/services/champselect.js';
 import { gradeAugmentChoices } from '../src/services/augments.js';
+import { evaluateRecentStats, evaluateTeam } from '../src/services/player.js';
 import { tierNameToId, TIER_NAMES, type ChampionBase, type ChampionStat } from '../src/models.js';
 
 // ---------- 测试数据 ----------
@@ -241,4 +242,44 @@ test('gradeAugmentChoices：阵容适配加分与 S/A/B/C/D 分级', () => {
   const noHero = gradeAugmentChoices([1, 2], [], stats, augments, heroTitles);
   assert.equal(noHero[0].score, 55);
   assert.equal(noHero[0].grade, 'A');
+});
+
+// ---------- 近期状态评估 ----------
+
+test('evaluateRecentStats：胜率+KDA 评分与结论', () => {
+  const mk = (wins: number, total: number, kills: number, deaths: number, assists: number, recent: {
+    queueId: number; win: boolean; championId: number; gameCreation: number; kills: number; deaths: number; assists: number;
+  }[] = []) => ({
+    summonerId: 1, name: 'x', icon: null, totalGames: total, wins,
+    kda: { kills, deaths, assists }, recent,
+  });
+  // 状态火热：8胜2负 KDA 4.0
+  const hot = evaluateRecentStats(mk(8, 10, 20, 5, 20));
+  assert.equal(hot.verdict, '🔥 状态火热');
+  assert.ok(hot.score >= 65);
+  assert.equal(hot.winRate, 80);
+  assert.equal(hot.kda, 8); // (20+20)/5
+  // 样本不足
+  const few = evaluateRecentStats(mk(1, 2, 3, 1, 1));
+  assert.equal(few.verdict, '📊 样本不足');
+  // 对应模式统计：10 场中 4 场是当前队列，2 胜
+  const withMode = evaluateRecentStats(mk(6, 10, 10, 10, 10, [
+    ...Array.from({ length: 4 }, (_, i) => ({ championId: i, win: i < 2, gameCreation: 0, queueId: 420, kills: 1, deaths: 1, assists: 1 })),
+    ...Array.from({ length: 6 }, (_, i) => ({ championId: i, win: true, gameCreation: 0, queueId: 450, kills: 1, deaths: 1, assists: 1 })),
+  ]), 420);
+  assert.equal(withMode.modeGames, 4);
+  assert.equal(withMode.modeWinRate, 50);
+});
+
+test('evaluateTeam：整体评估与最好/需留意', () => {
+  const s = (wins: number, total: number) => ({ summonerId: 1, name: 'x', icon: null, totalGames: total, wins, kda: { kills: 5, deaths: 3, assists: 5 }, recent: [] });
+  const team = evaluateTeam([
+    { name: 'A', isMe: true, stats: s(9, 10) },   // 90%
+    { name: 'B', isMe: false, stats: s(1, 10) },  // 10%
+    { name: 'C', isMe: false, stats: null },      // 无数据
+  ]);
+  assert.ok(team.hasData);
+  assert.equal(team.best, 'A');
+  assert.equal(team.worst, 'B');
+  assert.ok(team.avgScore > 0);
 });

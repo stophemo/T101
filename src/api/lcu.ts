@@ -191,6 +191,78 @@ export interface ChampSelectSession {
 export const KNOWN_QUEUE_IDS = new Set([420, 440, 450, 430, 400, 490]);
 
 /** 队列 id -> 模式（queueId 常见值：420 单双排 / 440 灵活排位 / 430 匹配 / 400 盲选 / 450 普通大乱斗） */
+/** 单场对局简况（从 match-history 解析） */
+export interface MatchStat {
+  championId: number;
+  win: boolean;
+  gameCreation: number;
+  queueId: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+}
+
+/** 召唤师近期战绩（最近最多 10 场，LCU match-history 只读） */
+export interface PlayerRecentStats {
+  summonerId: number;
+  name: string;
+  icon: number | null;
+  totalGames: number;
+  wins: number;
+  kda: { kills: number; deaths: number; assists: number };
+  recent: MatchStat[];
+}
+
+/**
+ * 查询召唤师近期战绩（最近 10 场）：用于队伍房间队友状态评估。
+ * match-history 端点不可用（腾讯阉割/权限）时返回 null。
+ */
+export async function getPlayerRecentStats(summonerId: number): Promise<PlayerRecentStats | null> {
+  try {
+    const s = await getSummoner(summonerId);
+    const raw = await lcuGet<{
+      games?: { games?: {
+        gameId?: number; gameCreation?: number; queueId?: number;
+        participants?: { championId?: number; stats?: { win?: boolean; kills?: number; deaths?: number; assists?: number } }[];
+        participantIdentities?: { player?: { summonerId?: number } }[];
+      }[] };
+    }>(`/lol-match-history/v1/products/lol/${s.puuid}/matches?begIndex=0&endIndex=10`);
+    const games = raw?.games?.games ?? [];
+    const recent: MatchStat[] = [];
+    for (const g of games) {
+      const idx = (g.participantIdentities ?? []).findIndex((p) => p.player?.summonerId === summonerId);
+      const p = idx >= 0 ? g.participants?.[idx] : undefined;
+      const st = p?.stats;
+      if (!g.queueId || !st) continue;
+      recent.push({
+        championId: p.championId ?? 0,
+        win: !!st.win,
+        gameCreation: g.gameCreation ?? 0,
+        queueId: g.queueId,
+        kills: st.kills ?? 0,
+        deaths: st.deaths ?? 0,
+        assists: st.assists ?? 0,
+      });
+    }
+    if (!recent.length) return null;
+    return {
+      summonerId,
+      name: s.displayName,
+      icon: s.profileIconId ?? null,
+      totalGames: recent.length,
+      wins: recent.filter((r) => r.win).length,
+      kda: recent.reduce(
+        (acc, r) => ({ kills: acc.kills + r.kills, deaths: acc.deaths + r.deaths, assists: acc.assists + r.assists }),
+        { kills: 0, deaths: 0, assists: 0 },
+      ),
+      recent,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** 队列 id → 模式/中文名（未知 id 视为海克斯大乱斗，CLI/Web 展示 queueId 便于反馈） */
 export function queueToMode(queueId: number | undefined): {
   mode: import('../models.js').GameMode;
   label: string;

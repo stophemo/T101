@@ -8,8 +8,20 @@ import { recommendPick, inferLane } from '../services/pick.js';
 import { recommendBan } from '../services/ban.js';
 import { analyzeChampSelect } from '../services/champselect.js';
 import { recommendAugments, recommendHextechHeroes } from '../services/hextech.js';
-import { findLcuConnectionCached, getGameflowPhase, getGameflowSession, getRankedStats, getCurrentSummoner, lcuGet, queueToMode } from '../api/lcu.js';
+import { findLcuConnectionCached, getGameflowPhase, getGameflowSession, getRankedStats, getCurrentSummoner, lcuGet, queueToMode, getPlayerRecentStats, type PlayerRecentStats } from '../api/lcu.js';
 import { heroDisplayName } from '../models.js';
+import { evaluateRecentStats, evaluateTeam } from '../services/player.js';
+
+/** 近期战绩缓存：房间 3s 轮询防抖（60s TTL） */
+const recentStatsCache = new Map<number, { data: PlayerRecentStats | null; ts: number }>();
+const RECENT_TTL_MS = 60_000;
+async function getCachedRecentStats(summonerId: number): Promise<PlayerRecentStats | null> {
+  const hit = recentStatsCache.get(summonerId);
+  if (hit && Date.now() - hit.ts < RECENT_TTL_MS) return hit.data;
+  const data = await getPlayerRecentStats(summonerId);
+  recentStatsCache.set(summonerId, { data, ts: Date.now() });
+  return data;
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -107,13 +119,14 @@ async function handleApi(route: string, params: URLSearchParams, res: ServerResp
       return;
     }
     case 'lobby': {
-      // 队伍聊天房间：接受对局后展示队友（lol-lobby/v2/lobby 只读）
+      // 队伍聊天房间：接受对局后展示队友 + 每人近期战绩状态（lol-lobby/v2/lobby + match-history 只读）
       try {
         const lobby = await lcuGet<{
           localMember?: { summonerId: number; gameName?: string; displayName?: string; summonerLevel?: number; profileIconId?: number };
           members?: { summonerId: number; gameName?: string; displayName?: string; summonerLevel?: number; profileIconId?: number }[];
           gameConfig?: { queueId?: number };
         }>('/lol-lobby/v2/lobby');
+        const queueId = lobby.gameConfig?.queueId;
         const members = (lobby.members ?? []).map((m) => ({
           summonerId: m.summonerId,
           name: m.displayName || m.gameName || `召唤师${m.summonerId}`,
@@ -121,7 +134,14 @@ async function handleApi(route: string, params: URLSearchParams, res: ServerResp
           icon: m.profileIconId,
           isMe: m.summonerId === lobby.localMember?.summonerId,
         }));
-        ok(res, { queueId: lobby.gameConfig?.queueId, modeLabel: queueToMode(lobby.gameConfig?.queueId ?? 0).label, localSummonerId: lobby.localMember?.summonerId, members });
+        // 近期战绩（60s 缓存：房间 3s 轮询，不能每轮都打 match-history）
+        const stats = await Promise.all(members.map((m) => getCachedRecentStats(m.summonerId)));
+        const enriched = members.map((m, i) => {
+          const s = stats[i];
+          return { ...m, stats: s ? evaluateRecentStats(s, queueId) : null };
+        });
+        const team = evaluateTeam(enriched.map((m) => ({ name: m.name, isMe: m.isMe, stats: stats[enriched.indexOf(m)] })), queueId);
+        ok(res, { queueId, mode: queueToMode(queueId).mode, modeLabel: queueToMode(queueId).label, localSummonerId: lobby.localMember?.summonerId, members: enriched, team });
       } catch (e) {
         fail(res, (e as Error).message);
       }
@@ -202,6 +222,46 @@ async function handleApi(route: string, params: URLSearchParams, res: ServerResp
     }
     case 'hex/augments': {
       ok(res, await recommendAugments(Number(p('top') ?? 20)));
+      return;
+    }
+    case 'friends': {
+      // 在线好友：近期战绩 + 组队建议（lol-chat 只读；战绩走 match-history + 60s 缓存）
+      try {
+        const friends = await lcuGet<{
+          pid?: string | number; name?: string; gameName?: string; availability?: string;
+          lol?: { level?: number; rankedLeagueTier?: string; rankedLeagueDivision?: string };
+        }[]>('/lol-chat/v1/friends');
+        const me = await getCurrentSummoner().catch(() => null);
+        const online = (friends ?? []).filter(
+          (f) => f.availability && f.availability !== 'offline' && String(f.pid) !== String(me?.summonerId ?? -1),
+        );
+        const results = await Promise.allSettled(online.map(async (f) => {
+          const summonerId = Number(f.pid);
+          if (!Number.isInteger(summonerId) || summonerId <= 0) return null;
+          const stats = await getCachedRecentStats(summonerId);
+          const v = stats ? evaluateRecentStats(stats) : null;
+          return {
+            summonerId,
+            name: f.gameName || f.name || `好友${summonerId}`,
+            status: f.availability ?? 'unknown',
+            level: f.lol?.level ?? null,
+            tier: f.lol?.rankedLeagueTier ? `${f.lol.rankedLeagueTier} ${f.lol.rankedLeagueDivision ?? ''}`.trim() : '',
+            icon: stats?.icon ?? null,
+            stats: v,
+          };
+        }));
+        const list = results
+          .filter((r): r is PromiseFulfilledResult<{
+            summonerId: number; name: string; status: string; level: number | null;
+            tier: string; icon: number | null; stats: ReturnType<typeof evaluateRecentStats> | null;
+          } | null> => r.status === 'fulfilled')
+          .map((r) => r.value)
+          .filter((x): x is NonNullable<typeof x> => x !== null)
+          .sort((a, b) => (b.stats?.score ?? -1) - (a.stats?.score ?? -1));
+        ok(res, { count: list.length, friends: list });
+      } catch (e) {
+        fail(res, (e as Error).message);
+      }
       return;
     }
     case 'augment/search': {
