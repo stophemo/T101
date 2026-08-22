@@ -8,22 +8,52 @@ import { recommendPick, inferLane } from '../services/pick.js';
 import { recommendBan } from '../services/ban.js';
 import { analyzeChampSelect } from '../services/champselect.js';
 import { recommendAugments, recommendHextechHeroes } from '../services/hextech.js';
-import { findLcuConnectionCached, getGameflowPhase, getGameflowSession, getRankedStats, getCurrentSummoner, lcuGet, queueToMode, getPlayerRecentStats, getPlayerRecentStatsByPuuid, getSummoner, summonerDisplayName, type PlayerRecentStats } from '../api/lcu.js';
+import { findLcuConnectionCached, getGameflowPhase, getGameflowSession, getRankedStats, getCurrentSummoner, lcuGet, queueToMode, getPlayerRecentStats, getPlayerRecentStatsByPuuid, getLatestMatchGameId, getSummoner, summonerDisplayName, type PlayerRecentStats } from '../api/lcu.js';
 import { heroDisplayName } from '../models.js';
 import { evaluateRecentStats, evaluateTeam } from '../services/player.js';
 
-/** 近期战绩缓存：房间 3s 轮询防抖（60s TTL，key = summonerId 或 puuid） */
-const recentStatsCache = new Map<string, { data: PlayerRecentStats | null; ts: number }>();
-const RECENT_TTL_MS = 60_000;
-async function getCachedRecentStats(key: string | number): Promise<PlayerRecentStats | null> {
-  const k = String(key);
-  const hit = recentStatsCache.get(k);
-  if (hit && Date.now() - hit.ts < RECENT_TTL_MS) return hit.data;
-  const data = typeof key === 'number'
-    ? await getPlayerRecentStats(key)
-    : await getPlayerRecentStatsByPuuid(key);
-  recentStatsCache.set(k, { data, ts: Date.now() });
+/**
+ * 近期战绩懒加载缓存：
+ * - key = `{summonerId|puuid}:{queueId|''}`（切模式自动重查）
+ * - 5 分钟 TTL + in-flight 合并（并发同 key 只发一次）
+ * - 增量更新：TTL 过期后先查最近 1 场 gameId，无新战绩则续期复用，有新战绩才全量重查
+ */
+const recentStatsCache = new Map<string, { data: PlayerRecentStats | null; ts: number; lastGameId: number | null }>();
+const recentInFlight = new Map<string, Promise<PlayerRecentStats | null>>();
+const RECENT_TTL_MS = 5 * 60_000;
+
+async function loadRecent(key: string | number, queueId?: number): Promise<PlayerRecentStats | null> {
+  if (typeof key === 'number') {
+    return getPlayerRecentStats(key, { queueId });
+  }
+  // puuid 场景：增量检查——先看最新 gameId 是否变化
+  const puuid = key.replace(/@pvp\.net$/, '');
+  const latest = await getLatestMatchGameId(puuid).catch(() => null);
+  const entry = recentStatsCache.get(`${key}:${queueId ?? ''}`);
+  if (entry && entry.lastGameId !== null && latest !== null && latest === entry.lastGameId) {
+    entry.ts = Date.now(); // 无新战绩：续期复用
+    return entry.data;
+  }
+  const data = await getPlayerRecentStatsByPuuid(puuid, { queueId });
   return data;
+}
+
+function getCachedRecentStats(key: string | number, queueId?: number): Promise<PlayerRecentStats | null> {
+  const k = `${key}:${queueId ?? ''}`;
+  const hit = recentStatsCache.get(k);
+  if (hit && Date.now() - hit.ts < RECENT_TTL_MS) return Promise.resolve(hit.data);
+  const inflight = recentInFlight.get(k);
+  if (inflight) return inflight;
+  const p = loadRecent(key, queueId).then((data) => {
+    recentStatsCache.set(k, { data, ts: Date.now(), lastGameId: data?.recent[0]?.gameId ?? null });
+    recentInFlight.delete(k);
+    return data;
+  }).catch((e) => {
+    recentInFlight.delete(k);
+    throw e;
+  });
+  recentInFlight.set(k, p);
+  return p;
 }
 
 /** 逐场明细 enrich：英雄名/别名/模式名（前端直接展示） */
@@ -173,17 +203,13 @@ async function handleApi(route: string, params: URLSearchParams, res: ServerResp
             icon: m.icon ?? info?.icon,
           };
         });
-        // 近期战绩（60s 缓存：房间 3s 轮询，不能每轮都打 match-history）
-        const [stats, recentLists] = await Promise.all([
-          Promise.all(members2.map((m) => getCachedRecentStats(m.summonerId))),
-          Promise.all(members2.map((m) => getCachedRecentStats(m.summonerId).then((s) => (s ? enrichRecent(s.recent) : [])))),
-        ]);
+        // 近期战绩摘要（懒加载缓存：5 分钟 TTL + in-flight 合并，按当前模式过滤）
+        const stats = await Promise.all(members2.map((m) => getCachedRecentStats(m.summonerId, queueId)));
         const enriched = members2.map((m, i) => {
           const s = stats[i];
           return {
             ...m,
             stats: s ? evaluateRecentStats(s, queueId) : null,
-            recent: recentLists[i],
           };
         });
         const team = evaluateTeam(enriched.map((m) => ({ name: m.name, isMe: m.isMe, stats: stats[enriched.indexOf(m)] })), queueId);
@@ -270,6 +296,21 @@ async function handleApi(route: string, params: URLSearchParams, res: ServerResp
       ok(res, await recommendAugments(Number(p('top') ?? 20)));
       return;
     }
+    case 'player-recent': {
+      // 懒加载：点选某玩家时才查逐场明细（缓存 5 分钟，按模式过滤）
+      const summonerId = Number(p('summonerId'));
+      const puuid = p('puuid') ?? '';
+      const queueId = Number(p('queueId')) || undefined;
+      const key = Number.isInteger(summonerId) && summonerId > 0 ? summonerId : puuid;
+      if (!key) { fail(res, '缺少 summonerId/puuid'); return; }
+      const s = await getCachedRecentStats(key, queueId);
+      if (!s) { ok(res, { stats: null, recent: [] }); return; }
+      ok(res, {
+        stats: evaluateRecentStats(s, queueId),
+        recent: await enrichRecent(s.recent),
+      });
+      return;
+    }
     case 'friends': {
       // 在线好友：近期战绩 + 组队建议 + 逐场明细（lol-chat 只读；pid 去 @pvp.net 即 puuid 查 match-history）
       try {
@@ -294,13 +335,11 @@ async function handleApi(route: string, params: URLSearchParams, res: ServerResp
             tier: f.lol?.rankedLeagueTier ? `${f.lol.rankedLeagueTier} ${f.lol.rankedLeagueDivision ?? ''}`.trim() : '',
             icon: stats?.icon ?? null,
             stats: v,
-            recent: stats ? await enrichRecent(stats.recent) : [],
           };
         }));
         type FriendEntry = {
           puuid: string; name: string; status: string; level: number | null; tier: string;
           icon: number | null; stats: ReturnType<typeof evaluateRecentStats> | null;
-          recent: Awaited<ReturnType<typeof enrichRecent>>;
         };
         const list = settled
           .filter((r): r is PromiseFulfilledResult<FriendEntry | null> => r.status === 'fulfilled')

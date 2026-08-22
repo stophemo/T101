@@ -211,6 +211,7 @@ export const KNOWN_QUEUE_IDS = new Set([420, 440, 450, 430, 400, 490, 2400]);
 /** 队列 id -> 模式（queueId 常见值：420 单双排 / 440 灵活排位 / 430 匹配 / 400 盲选 / 450 普通大乱斗） */
 /** 单场对局简况（从 match-history 解析） */
 export interface MatchStat {
+  gameId: number;
   championId: number;
   win: boolean;
   gameCreation: number;
@@ -236,26 +237,35 @@ export interface PlayerRecentStats {
 /**
  * 查询召唤师近期战绩（最近 10 场）：用于队伍房间队友状态评估。
  * 支持 summonerId（自动补名字/头像）或 puuid（好友场景，名字/头像从战绩数据补）。
- * match-history 端点不可用（腾讯阉割/权限）时返回 null。
+ * queueId 传入时按该模式过滤（match-history queue 参数）。不可用时返回 null。
  */
-export async function getPlayerRecentStats(summonerId: number, nameHint?: string): Promise<PlayerRecentStats | null> {
+export async function getPlayerRecentStats(summonerId: number, opts: { queueId?: number; nameHint?: string } = {}): Promise<PlayerRecentStats | null> {
   try {
     const s = await getSummoner(summonerId);
-    const parsed = await fetchMatchHistory(s.puuid, summonerId, nameHint ?? summonerDisplayName(s), s.profileIconId ?? null);
-    if (parsed) return parsed;
-    // summoner 端点可用但 matches 失败：尝试直接拿 puuid 后重查（容错）
-    return fetchMatchHistory(s.puuid, summonerId, nameHint ?? summonerDisplayName(s), s.profileIconId ?? null);
+    return fetchMatchHistory(s.puuid, summonerId, opts.nameHint ?? summonerDisplayName(s), s.profileIconId ?? null, opts.queueId);
   } catch {
     return null;
   }
 }
 
 /** 好友场景：pid（UUID@pvp.net）去后缀即 puuid，直接查战绩 */
-export async function getPlayerRecentStatsByPuuid(puuid: string, nameHint?: string): Promise<PlayerRecentStats | null> {
-  return fetchMatchHistory(puuid.replace(/@pvp\.net$/, ''), 0, nameHint ?? '', null);
+export async function getPlayerRecentStatsByPuuid(puuid: string, opts: { queueId?: number; nameHint?: string } = {}): Promise<PlayerRecentStats | null> {
+  return fetchMatchHistory(puuid.replace(/@pvp\.net$/, ''), 0, opts.nameHint ?? '', null, opts.queueId);
 }
 
-async function fetchMatchHistory(puuid: string, summonerId: number, name: string, icon: number | null): Promise<PlayerRecentStats | null> {
+/** 增量更新：只查最近 1 场拿 gameId，用于判断战绩是否有更新（无变化则复用缓存） */
+export async function getLatestMatchGameId(puuid: string): Promise<number | null> {
+  try {
+    const raw = await lcuGet<{ games?: { games?: { gameId?: number }[] } }>(
+      `/lol-match-history/v1/products/lol/${puuid.replace(/@pvp\.net$/, '')}/matches?begIndex=0&endIndex=1`,
+    );
+    return raw?.games?.games?.[0]?.gameId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchMatchHistory(puuid: string, summonerId: number, name: string, icon: number | null, queueId?: number): Promise<PlayerRecentStats | null> {
   try {
     const raw = await lcuGet<{
       games?: { games?: {
@@ -263,8 +273,10 @@ async function fetchMatchHistory(puuid: string, summonerId: number, name: string
         participants?: { championId?: number; stats?: { win?: boolean; kills?: number; deaths?: number; assists?: number } }[];
         participantIdentities?: { player?: { summonerId?: number; puuid?: string; profileIcon?: number } }[];
       }[] };
-    }>(`/lol-match-history/v1/products/lol/${puuid}/matches?begIndex=0&endIndex=10`);
-    const games = raw?.games?.games ?? [];
+      // 国服 LCU 不支持 queue 过滤参数（返回 400）：查 20 场后在本地按 queueId 过滤
+    }>(`/lol-match-history/v1/products/lol/${puuid}/matches?begIndex=0&endIndex=20`);
+    // 本地按模式过滤（LCU 不支持 queue 参数），最多 10 场
+    const games = (raw?.games?.games ?? []).filter((g) => !queueId || g.queueId === queueId).slice(0, 10);
     const recent: MatchStat[] = [];
     let iconFromGames: number | null = icon;
     for (const g of games) {
@@ -275,6 +287,7 @@ async function fetchMatchHistory(puuid: string, summonerId: number, name: string
       const st = p?.stats;
       if (!g.queueId || !st) continue;
       recent.push({
+        gameId: g.gameId ?? 0,
         championId: p.championId ?? 0,
         win: !!st.win,
         gameCreation: g.gameCreation ?? 0,

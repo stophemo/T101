@@ -1,4 +1,4 @@
-// 服务层纯函数测试：pick/ban v2（对位驱动）+ 位置推断 + 段位映射（不依赖网络）
+﻿// 服务层纯函数测试：pick/ban v2（对位驱动）+ 位置推断 + 段位映射（不依赖网络）
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { computeBanRecommendations } from '../src/services/ban.js';
@@ -248,7 +248,7 @@ test('gradeAugmentChoices：阵容适配加分与 S/A/B/C/D 分级', () => {
 
 test('evaluateRecentStats：胜率+KDA 评分与结论', () => {
   const mk = (wins: number, total: number, kills: number, deaths: number, assists: number, recent: {
-    queueId: number; win: boolean; championId: number; gameCreation: number; kills: number; deaths: number; assists: number; duration: number;
+    queueId: number; win: boolean; gameId: number; championId: number; gameCreation: number; kills: number; deaths: number; assists: number; duration: number;
   }[] = []) => ({
     summonerId: 1, name: 'x', icon: null, totalGames: total, wins,
     kda: { kills, deaths, assists }, recent,
@@ -264,8 +264,8 @@ test('evaluateRecentStats：胜率+KDA 评分与结论', () => {
   assert.equal(few.verdict, '📊 样本不足');
   // 对应模式统计：10 场中 4 场是当前队列，2 胜
   const withMode = evaluateRecentStats(mk(6, 10, 10, 10, 10, [
-    ...Array.from({ length: 4 }, (_, i) => ({ championId: i, win: i < 2, gameCreation: 0, queueId: 420, kills: 1, deaths: 1, assists: 1, duration: 1000 })),
-    ...Array.from({ length: 6 }, (_, i) => ({ championId: i, win: true, gameCreation: 0, queueId: 450, kills: 1, deaths: 1, assists: 1, duration: 1000 })),
+    ...Array.from({ length: 4 }, (_, i) => ({ gameId: i, championId: i, win: i < 2, gameCreation: 0, queueId: 420, kills: 1, deaths: 1, assists: 1, duration: 1000 })),
+    ...Array.from({ length: 6 }, (_, i) => ({ gameId: i, championId: i, win: true, gameCreation: 0, queueId: 450, kills: 1, deaths: 1, assists: 1, duration: 1000 })),
   ]), 420);
   assert.equal(withMode.modeGames, 4);
   assert.equal(withMode.modeWinRate, 50);
@@ -283,3 +283,4 @@ test('evaluateTeam：整体评估与最好/需留意', () => {
   assert.equal(team.worst, 'B');
   assert.ok(team.avgScore > 0);
 });
+

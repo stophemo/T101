@@ -645,21 +645,30 @@ function lobbyCard(m, sel) {
 
 let lobbyData = null;
 let selMemberId = null;
+/** 已加载过明细的 key（summonerId:queueId），避免轮询重复查 */
+const recentLoadedFor = new Set();
 
-/** 明细面板：选中成员的最近 10 场逐场 */
-function renderRecent() {
-  const list = (lobbyData?.members ?? []);
-  const m = list.find((x) => x.summonerId === selMemberId) ?? list.find((x) => x.isMe);
-  if (!m) { $('stRecent').innerHTML = ''; return; }
-  selMemberId = m.summonerId;
-  $('stRecent').innerHTML = recentPanelHTML(`${m.name}${m.isMe ? ' (我)' : ''}`, m.stats, m.recent || []);
+/** 懒加载：点选玩家时才查逐场明细（服务端 5 分钟缓存） */
+async function loadPlayerRecent(entry, queueId) {
+  if (!entry) { $('stRecent').innerHTML = ''; return; }
+  selMemberId = entry.summonerId;
+  $('stRecent').innerHTML = `<h3>📋 ${esc(entry.name)} 近期战绩 <span class="hint">查询中…</span></h3>`;
+  try {
+    const params = { queueId: queueId || '' };
+    if (entry.summonerId) params.summonerId = entry.summonerId;
+    if (entry.puuid) params.puuid = entry.puuid;
+    const d = await api('player-recent', params);
+    $('stRecent').innerHTML = recentPanelHTML(entry.name, d.stats, d.recent || []);
+  } catch (e) {
+    $('stRecent').innerHTML = `<h3>📋 ${esc(entry.name)} 近期战绩</h3><div class="msg">❌ ${esc(e.message)}</div>`;
+  }
 }
 
 function selectMember(id) {
-  selMemberId = id;
-  if (!lobbyData) return;
-  $('stLobbyBoard').innerHTML = lobbyData.members.map((m) => lobbyCard(m, m.summonerId === id)).join('');
-  renderRecent();
+  const m = (lobbyData?.members ?? []).find((x) => x.summonerId === id);
+  if (!m) return;
+  $('stLobbyBoard').innerHTML = lobbyData.members.map((mm) => lobbyCard(mm, mm.summonerId === id)).join('');
+  loadPlayerRecent(m, lobbyData.queueId);
 }
 
 async function renderLobby() {
@@ -675,7 +684,12 @@ async function renderLobby() {
   const sel = selMemberId ?? d.members.find((x) => x.isMe)?.summonerId ?? null;
   selMemberId = sel;
   $('stLobbyBoard').innerHTML = d.members.map((m) => lobbyCard(m, m.summonerId === sel)).join('');
-  renderRecent();
+  // 默认选中自己时懒加载一次明细；已选玩家不变则复用前端缓存（服务端 5 分钟缓存兜底）
+  const cur = d.members.find((x) => x.summonerId === selMemberId);
+  if (cur && !recentLoadedFor.has(`${cur.summonerId}:${d.queueId}`)) {
+    recentLoadedFor.add(`${cur.summonerId}:${d.queueId}`);
+    loadPlayerRecent(cur, d.queueId);
+  }
   const t = d.team;
   $('stTeamEval').innerHTML = t
     ? `<h3>🧭 队伍状态评估</h3>
@@ -999,11 +1013,19 @@ function selectFriend(puuid) {
   selFriendId = puuid;
   if (!friendsData) return;
   $('frList').innerHTML = friendsData.friends.map((f) => frCard(f, f.puuid === puuid)).join('');
-  renderFriendRecent();
+  loadFriendRecent();
 }
-function renderFriendRecent() {
+/** 好友明细懒加载 */
+async function loadFriendRecent() {
   const f = (friendsData?.friends ?? []).find((x) => x.puuid === selFriendId);
-  $('stFrRecent').innerHTML = f ? recentPanelHTML(f.name, f.stats, f.recent || []) : '';
+  if (!f) { $('stFrRecent').innerHTML = ''; return; }
+  $('stFrRecent').innerHTML = `<h3>📋 ${esc(f.name)} 近期战绩 <span class="hint">查询中…</span></h3>`;
+  try {
+    const d = await api('player-recent', { puuid: f.puuid });
+    $('stFrRecent').innerHTML = recentPanelHTML(f.name, d.stats, d.recent || []);
+  } catch (e) {
+    $('stFrRecent').innerHTML = `<h3>📋 ${esc(f.name)} 近期战绩</h3><div class="msg">❌ ${esc(e.message)}</div>`;
+  }
 }
 async function loadFriends(force = false) {
   if (!force && !$('autoRefresh').checked) return;
@@ -1018,7 +1040,7 @@ async function loadFriends(force = false) {
     $('frList').innerHTML = d.friends.length
       ? d.friends.map((f) => frCard(f, f.puuid === selFriendId)).join('')
       : '<div class="msg">当前没有在线好友</div>';
-    renderFriendRecent();
+    loadFriendRecent();
   } catch (e) {
     $('frMsg').textContent = '❌ ' + e.message;
     $('frMsg').classList.remove('hidden');
