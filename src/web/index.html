@@ -71,6 +71,41 @@
   .slot .cardback { width: 40px; height: 40px; margin: 0 auto; border-radius: 10px; background: linear-gradient(135deg, #3b2a10, #1f1608); border: 2px solid var(--gold); display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--gold); box-shadow: 0 0 8px rgba(251,191,36,.25); }
   .slot.flipped img { box-shadow: 0 0 10px rgba(251,191,36,.55); border: 2px solid rgba(251,191,36,.5); }
 
+  /* 对局主视图：状态栏 + 流程指示条 */
+  .stage-top { background: var(--card2); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; margin-bottom: 12px; }
+  .st-timer { font-size: 26px; font-weight: 800; color: var(--gold); font-variant-numeric: tabular-nums; letter-spacing: 1px; }
+  .st-timer.warn { color: var(--red); animation: blink 1s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: .45; } }
+  .flow { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .flow .fp { font-size: 12px; color: var(--dim); border: 1px solid var(--border); border-radius: 14px; padding: 3px 12px; background: rgba(255,255,255,.02); }
+  .flow .fp.cur { color: var(--gold); border-color: var(--gold); box-shadow: 0 0 8px rgba(251,191,36,.25); font-weight: 700; }
+  .flow .fp.done { color: var(--cyan); border-color: rgba(11,198,227,.4); }
+  .flow i { color: var(--dim); font-style: normal; font-size: 13px; }
+
+  /* 禁用棋盘：蓝 5 + 红 5 大槽位 */
+  .ban-board { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .ban-board { grid-template-columns: 1fr; } }
+  .ban-side { background: rgba(255,255,255,.015); border: 1px solid var(--border); border-radius: 10px; padding: 10px; }
+  .ban-slots { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .ban-slot { aspect-ratio: 3/4; border: 2px dashed var(--border); border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; position: relative; background: rgba(0,0,0,.18); }
+  .ban-slot.filled { border-style: solid; border-color: rgba(248,113,113,.45); }
+  .ban-slot img { width: 46px; height: 46px; border-radius: 10px; }
+  .ban-slot .nm { font-size: 11px; color: var(--text); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ban-slot .order { position: absolute; top: 4px; left: 6px; font-size: 10px; color: var(--dim); }
+
+  /* 选人轮次条：B1B2→R1R2R3→B3B4→R4R5→B5 */
+  .rounds { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .round { font-size: 12px; color: var(--dim); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; background: rgba(255,255,255,.02); }
+  .round.blue { color: var(--cyan); border-color: rgba(11,198,227,.35); }
+  .round.red { color: var(--red); border-color: rgba(248,113,113,.35); }
+  .round.cur { color: var(--gold); border-color: var(--gold); box-shadow: 0 0 8px rgba(251,191,36,.3); font-weight: 700; }
+  .round.done { opacity: .45; text-decoration: line-through; }
+
+  /* 加载进度条 */
+  .load-progress { height: 10px; border-radius: 6px; background: rgba(255,255,255,.06); border: 1px solid var(--border); overflow: hidden; margin-bottom: 14px; }
+  .load-bar { height: 100%; width: 0; border-radius: 6px; background: linear-gradient(90deg, var(--cyan), var(--gold)); animation: loadfill 1.4s ease-in-out infinite; }
+  @keyframes loadfill { 0% { width: 5%; } 50% { width: 65%; } 100% { width: 5%; } }
+
   /* recommendation cards */
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
   .hero-card { background: var(--card2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: center; position: relative; transition: transform .12s, border-color .12s; }
@@ -129,59 +164,100 @@
   </header>
 
   <nav id="tabs">
-    <button data-tab="bp" class="active">🎯 BP 助手</button>
+    <button data-tab="bp" class="active">🎮 对局</button>
     <button data-tab="hex">🃏 海克斯大乱斗</button>
     <button data-tab="pick">⚔ Pick 推荐</button>
     <button data-tab="ban">🛡 Ban 建议</button>
     <button data-tab="rank">📊 榜单</button>
     <button data-tab="hero">🔍 对位克制</button>
-    <button data-tab="loading">🎮 加载画面</button>
   </nav>
 
-  <!-- ===== BP 助手（自动） ===== -->
+  <!-- ===== 对局（按真实流程：房间 → 禁用 → 选人 → 加载 → 游戏） ===== -->
   <section class="tab active" id="tab-bp">
-    <div class="card">
-      <h3>对局流程实时分析 <span class="hint">自动从本地客户端读取 · 按真实 BP 流程展示</span></h3>
-      <div class="msg" id="bpMsg">正在检测对局状态…</div>
-      <div id="bpBody" class="hidden">
-        <div class="row" style="margin-bottom:10px;flex-wrap:wrap;gap:12px">
-          <span class="sub">我方位置:</span><span id="bpMyLane" class="sub" style="color:var(--cyan)"></span>
-          <span class="phase-badge" id="bpTimerPhase" style="margin-left:8px"></span>
-          <span class="sub" id="bpTimer"></span>
-          <span class="sub" id="bpTurn" style="margin-left:auto"></span>
-        </div>
-        <div class="card" id="bpBanPhase" style="margin:0 0 14px;border-color:rgba(248,113,113,.2)">
-          <h3 style="color:var(--red)">🚫 禁用阶段 <span class="hint">10 人同时选，每人 1 个，共 10 个</span></h3>
-          <div class="row" style="gap:18px;flex-wrap:wrap">
-            <div><div class="sub" style="margin-bottom:5px;color:var(--cyan)">🔵 我方</div><div class="chips" id="bpMyBanSlots"></div></div>
-            <div><div class="sub" style="margin-bottom:5px;color:var(--red)">🔴 对面</div><div class="chips" id="bpEnemyBanSlots"></div></div>
-          </div>
-        </div>
-        <div class="card hidden" id="bpHexPhase" style="margin:0 0 14px;border-color:rgba(251,191,36,.3)">
-          <h3 style="color:var(--gold)">🎴 翻牌阶段 <span class="hint">每人翻开 2-3 张卡，翻开的英雄进入共享池全员可选 · 无 Ban · 约 60s 倒计时</span></h3>
-          <div class="sub" style="color:var(--cyan);margin-bottom:4px">🔵 我方 5 人翻牌（金色 = 已翻开进池）</div>
-          <div class="board" id="bpHexBoard"></div>
-        </div>
-        <div class="card" id="bpPickPhase" style="margin:0 0 14px">
-          <h3>⚔ 选人阶段 <span class="hint">按楼序轮选 B1B2→R1R2R3→B3B4→R4R5→B5，每轮 30s</span></h3>
-          <div class="sub" style="color:var(--cyan);margin-bottom:4px">🔵 我方</div>
-          <div class="board" id="bpMyBoard"></div>
-          <div class="sub" style="color:var(--red);margin:10px 0 4px">🔴 对面</div>
-          <div class="board" id="bpEnemyBoard"></div>
-        </div>
-        <div class="card" style="margin:0;border-color:rgba(74,222,128,.25)">
-          <h3 style="color:var(--green)" id="bpPicksTitle">🎯 推荐 Pick</h3>
-          <div class="grid" id="bpPicks"></div>
-        </div>
-        <div class="card" style="margin:14px 0 0;border-color:rgba(248,113,113,.25)">
-          <h3 style="color:var(--red)">🛡 推荐 Ban</h3>
-          <div class="grid" id="bpBans"></div>
-        </div>
+    <!-- 状态栏 + 流程指示条 -->
+    <div class="stage-top">
+      <div class="row" style="gap:14px;flex-wrap:wrap;align-items:center">
+        <span class="phase-badge" id="stPhase">—</span>
+        <span class="sub" id="stMode"></span>
+        <span class="st-timer" id="stTimer"></span>
+        <span class="sub" id="stTurn" style="margin-left:auto"></span>
+      </div>
+      <div class="flow" id="stFlow">
+        <span class="fp" data-fp="room">1 房间</span><i>›</i>
+        <span class="fp" data-fp="ban">2 禁用</span><i>›</i>
+        <span class="fp" data-fp="pick">3 选人</span><i>›</i>
+        <span class="fp" data-fp="load">4 加载</span><i>›</i>
+        <span class="fp" data-fp="game">5 游戏</span>
       </div>
     </div>
-    <!-- 游戏内：海克斯选牌推荐（3/7/11/14 级） -->
-    <div class="card hidden" id="bpAugPhase" style="margin:0;border-color:rgba(11,198,227,.3)">
-      <h3 style="color:var(--cyan)">🎮 游戏内海克斯推荐 <span class="hint">3 级 / 7 级 / 11 级 / 14 级各选一次 · 每张牌至少可重抽一次</span></h3>
+
+    <!-- ① 空闲：未在对局 -->
+    <div class="card" id="stIdle">
+      <div class="msg" style="padding:34px 18px">
+        <div style="font-size:40px;margin-bottom:10px">🕹️</div>
+        <div style="font-size:15px;color:var(--text)">未在对局流程中</div>
+        <div class="sub" style="margin-top:8px">匹配成功后自动进入：队伍房间 → 禁用/翻牌 → 选人 → 加载 → 游戏<br>海克斯大乱斗进游戏后（3/7/11/14 级）自动出现选牌推荐</div>
+      </div>
+    </div>
+
+    <!-- ② 队伍房间：接受对局后队友已就位 -->
+    <div class="card hidden" id="stLobby">
+      <h3>👥 队伍房间 <span class="hint" id="stLobbyHint"></span></h3>
+      <div class="board" id="stLobbyBoard"></div>
+    </div>
+
+    <!-- ③ 禁用阶段（排位）：10 人同时 ban，蓝 5 + 红 5 -->
+    <div class="card hidden" id="stBan">
+      <h3 style="color:var(--red)">🚫 禁用阶段 <span class="hint">10 人同时选，每人 1 个，共 10 个</span></h3>
+      <div class="ban-board">
+        <div class="ban-side">
+          <div class="sub" style="color:var(--cyan);margin-bottom:6px">🔵 我方</div>
+          <div class="ban-slots" id="stMyBans"></div>
+        </div>
+        <div class="ban-side">
+          <div class="sub" style="color:var(--red);margin-bottom:6px">🔴 对面</div>
+          <div class="ban-slots" id="stEnemyBans"></div>
+        </div>
+      </div>
+      <div class="card" style="margin:14px 0 0;border-color:rgba(248,113,113,.25)">
+        <h3 style="color:var(--red)">🛡 推荐 Ban</h3>
+        <div class="grid" id="stBans"></div>
+      </div>
+    </div>
+
+    <!-- ④ 选人阶段（排位）：楼序轮选 B1B2→R1R2R3→B3B4→R4R5→B5 -->
+    <div class="card hidden" id="stPick">
+      <h3>⚔ 选人阶段 <span class="hint">每轮 30s 倒计时</span></h3>
+      <div class="rounds" id="stRounds"></div>
+      <div class="board" id="stMyBoard" style="margin-top:10px"></div>
+      <div class="board" id="stEnemyBoard" style="margin-top:10px"></div>
+      <div class="card" style="margin:14px 0 0;border-color:rgba(74,222,128,.25)">
+        <h3 style="color:var(--green)">🎯 推荐 Pick</h3>
+        <div class="grid" id="stPicks"></div>
+      </div>
+    </div>
+
+    <!-- ⑤ 海斗翻牌（海克斯大乱斗）：翻牌 → 共享池 -->
+    <div class="card hidden" id="stHex">
+      <h3 style="color:var(--gold)">🎴 翻牌阶段 <span class="hint">每人翻开 2-3 张卡，约 10s 后进共享池 · 全员可选 · 无 Ban · 约 60s 倒计时</span></h3>
+      <div class="board" id="stHexBoard"></div>
+      <div class="card" style="margin:14px 0 0;border-color:rgba(74,222,128,.25)">
+        <h3 style="color:var(--green)">🏊 共享池推荐（按胜率排序）</h3>
+        <div class="grid" id="stHexPool"></div>
+      </div>
+    </div>
+
+    <!-- ⑥ 加载动画：10 人卡片 + 进度条 -->
+    <div class="card hidden" id="stLoading">
+      <h3>🎬 加载画面 <span class="hint">10 名玩家信息 · 进度条满即进入对局</span></h3>
+      <div class="load-progress"><div class="load-bar" id="stLoadBar"></div></div>
+      <div class="msg hidden" id="stLoadMsg"></div>
+      <div id="stLoadingBody" class="hidden"></div>
+    </div>
+
+    <!-- ⑦ 游戏中（海斗）：海克斯选牌推荐 -->
+    <div class="card hidden" id="stGame">
+      <h3 style="color:var(--cyan)">🎮 游戏内海克斯推荐 <span class="hint">3 / 7 / 11 / 14 级各选一次 · 每张牌至少可重抽一次</span></h3>
       <div class="row" style="gap:8px;margin-bottom:8px">
         <input type="text" id="augInput" placeholder="输入当前出现的牌名关键词（如：魔法飞弹），回车添加" style="flex:1;min-width:200px">
         <button class="primary" id="augAddBtn" type="button">＋ 添加</button>
@@ -287,15 +363,6 @@
       </div>
       <div class="err" id="heroErr"></div>
       <div id="heroResult" style="margin-top:14px"></div>
-    </div>
-  </section>
-
-  <!-- ===== 加载画面 ===== -->
-  <section class="tab" id="tab-loading">
-    <div class="card">
-      <h3>加载画面 10 人信息 <span class="hint">自动读取 · 需在加载/对局中</span></h3>
-      <div class="msg" id="loadingMsg">正在检测对局状态…</div>
-      <div id="loadingBody" class="hidden"></div>
     </div>
   </section>
 </div>
@@ -405,7 +472,7 @@ async function lcuStatus() {
 }
 
 /* ---------- BP 助手（对局流程视图） ---------- */
-let bpTimer = null;
+let stageTimer = null;
 let curPhase = 'None'; // 由 lcuStatus 更新：Lobby/ChampSelect/GameStart/InProgress...
 const LANE_CN = { TOP: '上单', JUNGLE: '打野', MIDDLE: '中单', BOTTOM: '下路', SUPPORT: '辅助', UTILITY: '辅助', none: '?', fill: '补位', NONE: '?', FILL: '补位' };
 
@@ -457,118 +524,155 @@ function hexPoolCard(h) {
   </div>`;
 }
 
-/** 队伍房间：接受对局后显示队友 */
-async function loadLobby() {
-  try {
-    const d = await api('lobby');
-    $('bpMsg').classList.add('hidden');
-    $('bpBody').classList.remove('hidden');
-    $('bpMyLane').textContent = '队伍房间';
-    $('bpTimerPhase').textContent = '等待开始';
-    $('bpTimer').textContent = '';
-    $('bpTurn').textContent = '等待 Ban 阶段开始…';
-    $('bpMyBanSlots').innerHTML = '';
-    $('bpEnemyBanSlots').innerHTML = '';
-    $('bpMyBoard').innerHTML = '';
-    $('bpEnemyBoard').innerHTML = `<div class="sub" style="margin-bottom:8px">👥 队伍成员（${d.members.length}/5）— 接受对局后队友已就位</div>`
-      + `<div class="board">${d.members.map((m) => `<div class="slot ${m.isMe ? 'me' : ''}">
-        <img src="${m.icon ? `https://game.gtimg.cn/images/lol/act/img/profileicon/${m.icon}.png` : ''}" onerror="this.style.visibility='hidden'">
-        <div class="nm">${esc(m.name)}${m.isMe ? ' (我)' : ''}</div>
-        <div class="ln">Lv.${m.level ?? '-'}</div>
-      </div>`).join('')}</div>`;
-    $('bpPicks').innerHTML = '';
-    $('bpBans').innerHTML = '';
-  } catch (e) {
-    $('bpMsg').textContent = '❌ ' + e.message;
-    $('bpMsg').classList.remove('hidden');
-    $('bpBody').classList.add('hidden');
+/* ---------- 对局主视图：按真实流程阶段驱动（房间→禁用→选人→加载→游戏） ---------- */
+const STAGE_ORDER = ['room', 'ban', 'pick', 'load', 'game'];
+function showStage(stage) {
+  $('stIdle').classList.toggle('hidden', stage !== 'idle');
+  $('stLobby').classList.toggle('hidden', stage !== 'lobby');
+  $('stBan').classList.toggle('hidden', stage !== 'ban');
+  $('stPick').classList.toggle('hidden', stage !== 'pick');
+  $('stHex').classList.toggle('hidden', stage !== 'hex');
+  $('stLoading').classList.toggle('hidden', stage !== 'loading');
+  $('stGame').classList.toggle('hidden', stage !== 'game');
+  const map = { lobby: 'room', ban: 'ban', pick: 'pick', hex: 'pick', loading: 'load', game: 'game' };
+  const cur = map[stage];
+  if (cur) {
+    document.querySelectorAll('#stFlow .fp').forEach((el) => {
+      const f = el.dataset.fp;
+      el.classList.toggle('done', cur !== 'room' && STAGE_ORDER.indexOf(f) < STAGE_ORDER.indexOf(cur));
+      el.classList.toggle('cur', f === cur);
+    });
   }
 }
 
-async function loadBP(force = false) {
+/** ban 大槽位（蓝 5 + 红 5） */
+function banSlotGrid(bans, d) {
+  const slots = [];
+  for (let i = 0; i < 5; i++) {
+    const id = bans[i] || 0;
+    slots.push(id > 0
+      ? `<div class="ban-slot filled"><span class="order">#${i + 1}</span><img src="${heroImg(d.heroAliases[id] || '')}" onerror="this.style.visibility='hidden'"><div class="nm">${esc(d.heroNames[id] || id)}</div></div>`
+      : `<div class="ban-slot"><span class="order">#${i + 1}</span><div class="nm" style="color:var(--dim)">待禁用</div></div>`);
+  }
+  return slots.join('');
+}
+
+/** 选人轮次条（排位 5v5 楼序 B1B2→R1R2R3→B3B4→R4R5→B5） */
+const PICK_ROUNDS = [
+  { label: 'B1 B2', team: 'blue', start: 0, end: 2 },
+  { label: 'R1 R2 R3', team: 'red', start: 2, end: 5 },
+  { label: 'B3 B4', team: 'blue', start: 5, end: 7 },
+  { label: 'R4 R5', team: 'red', start: 7, end: 9 },
+  { label: 'B5', team: 'blue', start: 9, end: 10 },
+];
+
+async function renderIdle() {
+  showStage('idle');
+  $('stPhase').textContent = curPhase === 'ReadyCheck' ? '📲 对局匹配成功 — 等待接受' : '—';
+  $('stMode').textContent = '';
+  $('stTimer').textContent = '';
+  $('stTurn').textContent = '';
+}
+
+async function renderLobby() {
+  const d = await api('lobby');
+  showStage('lobby');
+  $('stPhase').textContent = '👥 队伍房间';
+  $('stMode').textContent = d.modeLabel ? `模式: ${d.modeLabel}` : '';
+  $('stTimer').textContent = '';
+  $('stTurn').textContent = `${d.members.length}/5 人已就位`;
+  $('stLobbyHint').textContent = d.modeLabel ? `${d.modeLabel} · 接受对局后队友已进入房间` : '接受对局后队友已进入房间';
+  $('stLobbyBoard').innerHTML = d.members.map((m) => `<div class="slot ${m.isMe ? 'me' : ''}">
+    <img src="${m.icon ? `https://game.gtimg.cn/images/lol/act/img/profileicon/${m.icon}.png` : ''}" onerror="this.style.visibility='hidden'">
+    <div class="nm">${esc(m.name)}${m.isMe ? ' (我)' : ''}</div>
+    <div class="ln">Lv.${m.level ?? '-'}</div>
+  </div>`).join('');
+}
+
+async function renderChampSelect() {
+  const d = await api('champselect');
+  $('stPhase').textContent = d.timerPhase;
+  $('stMode').textContent = `模式: ${d.modeLabel} · 段位: ${d.tierName} · 我方位置: ${d.myLane === 'ALL' ? '未分配' : LANE_CN[d.myLane] || d.myLane}`;
+  $('stTimer').textContent = d.timeLeftSec > 0 ? `${d.timeLeftSec}s` : '';
+  $('stTimer').classList.toggle('warn', d.timeLeftSec > 0 && d.timeLeftSec <= 10);
+  const act = d.currentAction;
+  $('stTurn').textContent = act
+    ? `第 ${d.completedActions + 1}/${d.totalActions} 手 · ${act.isAlly ? '🔵我方' : '🔴对面'} ${LANE_CN[act.lane] || act.lane || ''} ${act.actorName} 正在${act.type === 'ban' ? '禁用' : '选择'}${act.isMe ? ' ← 轮到你！' : ''}`
+    : `已操作 ${d.completedActions}/${d.totalActions} 手`;
+
+  const isRanked = d.mode === 'ranked_solo' || d.mode === 'ranked_flex';
+  const isHex = d.mode === 'hextech_aram';
+  if (isHex) {
+    // 海斗：翻牌 + 共享池推荐
+    showStage('hex');
+    $('stHexBoard').innerHTML = d.myTeamBoard.map((p) => hexFlipHTML(p, d)).join('');
+    const pool = d.aramPool || [];
+    $('stHexPool').innerHTML = pool.length
+      ? pool.map(hexPoolCard).join('')
+      : '<div class="msg">🎴 队友翻牌中 — 翻开的英雄进池后自动推荐</div>';
+    return;
+  }
+  // 排位/匹配：ban 阶段 → 选人阶段（前 10 手为 ban，完成后进入选人）
+  const banTotal = Math.min(10, d.totalActions);
+  if (d.totalActions > 0 && d.completedActions < banTotal) {
+    showStage('ban');
+    $('stMyBans').innerHTML = banSlotGrid(d.myBans, d);
+    $('stEnemyBans').innerHTML = banSlotGrid(d.enemyBans, d);
+    $('stBans').innerHTML = d.bans.length
+      ? d.bans.map((h) => heroCard(h, { extra: banExtra(h) })).join('')
+      : '<div class="msg">我方选完英雄后自动给出建议</div>';
+    return;
+  }
+  showStage('pick');
+  const pickDone = Math.max(0, d.completedActions - banTotal);
+  $('stRounds').innerHTML = PICK_ROUNDS.map((r) => {
+    const cls = [r.team];
+    if (pickDone >= r.end) cls.push('done');
+    if (pickDone >= r.start && pickDone < r.end) cls.push('cur');
+    return `<span class="round ${cls.join(' ')}">${r.label}</span>`;
+  }).join('');
+  $('stMyBoard').innerHTML = d.myTeamBoard.map((p) => slotHTML(p, d)).join('');
+  $('stEnemyBoard').innerHTML = d.enemyTeamBoard.map((p) => slotHTML(p, d)).join('');
+  $('stPicks').innerHTML = d.picks.length
+    ? d.picks.map((h) => heroCard(h, { extra: pickExtra(h) })).join('')
+    : '<div class="msg">对面还没选英雄，选完自动刷新</div>';
+}
+
+async function renderLoading() {
+  showStage('loading');
+  $('stPhase').textContent = '🎬 加载画面';
+  $('stMode').textContent = '';
+  $('stTimer').textContent = '';
+  $('stTurn').textContent = '10 名玩家信息 · 进度条满即进入对局';
+  await loadLoading(true);
+}
+
+async function renderGame() {
+  showStage('game');
+  $('stPhase').textContent = '🎮 游戏中';
+  $('stMode').textContent = '';
+  $('stTimer').textContent = '';
+  $('stTurn').textContent = '3/7/11/14 级海克斯选牌推荐（峡谷对局无牌可搜）';
+  await refreshAugReco(true);
+}
+
+async function renderStage(force = false) {
   if (!force && !$('autoRefresh').checked) return;
-  // 队伍房间阶段：显示队友（接受对局 → 房间 → ban）
-  if (curPhase === 'Lobby') { await loadLobby(); return; }
   try {
-    const d = await api('champselect');
-    $('bpMsg').classList.add('hidden');
-    $('bpBody').classList.remove('hidden');
-    $('bpAugPhase').classList.add('hidden');
-    $('bpMyLane').textContent = `模式: ${d.modeLabel} · 段位: ${d.tierName}`;
-    // 阶段横幅：阶段 + 倒计时 + 轮到谁
-    $('bpTimerPhase').textContent = d.timerPhase;
-    $('bpTimer').textContent = d.timeLeftSec > 0 ? `剩余 ${d.timeLeftSec}s` : '';
-    const act = d.currentAction;
-    if (act) {
-      const laneCn = LANE_CN[act.lane] || '';
-      $('bpTurn').textContent = `第 ${d.completedActions + 1}/${d.totalActions} 手 · ${act.isAlly ? '🔵我方' : '🔴对面'} ${laneCn} ${act.actorName} 正在${act.type === 'ban' ? '禁用' : '选择'}${act.isMe ? ' ← 轮到你！' : ''}`;
-    } else {
-      $('bpTurn').textContent = `已操作 ${d.completedActions}/${d.totalActions} 手`;
-    }
-    // ban 槽位（5+5）
-    $('bpMyBanSlots').innerHTML = banSlotsHTML(d.myBans, d, 'blue');
-    $('bpEnemyBanSlots').innerHTML = banSlotsHTML(d.enemyBans, d, 'red');
-    // 5v5 选人棋盘（按楼序，操作者高亮）
-    $('bpMyBoard').innerHTML = d.myTeamBoard.map((p) => slotHTML(p, d)).join('');
-    $('bpEnemyBoard').innerHTML = d.enemyTeamBoard.map((p) => slotHTML(p, d)).join('');
-
-    const isRanked = d.mode === 'ranked_solo' || d.mode === 'ranked_flex';
-    const isHex = d.mode === 'hextech_aram';
-    // 模式切换：排位流程视图（ban 槽位+楼序棋盘） vs 海斗翻牌视图
-    $('bpBanPhase').classList.toggle('hidden', isHex);
-    $('bpPickPhase').classList.toggle('hidden', isHex);
-    $('bpHexPhase').classList.toggle('hidden', !isHex);
-    if (isRanked) {
-      $('bpPicksTitle').textContent = '🎯 推荐 Pick';
-      $('bpPicks').innerHTML = d.picks.length
-        ? d.picks.map((h) => heroCard(h, { extra: pickExtra(h) })).join('')
-        : '<div class="msg">对面还没选英雄，选完自动刷新</div>';
-      $('bpBans').innerHTML = d.bans.length
-        ? d.bans.map((h) => heroCard(h, { extra: banExtra(h) })).join('')
-        : '<div class="msg">我方选完英雄后自动给出建议</div>';
-    } else if (isHex) {
-      $('bpPicksTitle').textContent = '🏊 共享池推荐（按胜率排序）';
-      $('bpTurn').textContent = '🎴 翻牌 + 共享选择（全员同时，无楼序）';
-      $('bpHexBoard').innerHTML = d.myTeamBoard.map((p) => hexFlipHTML(p, d)).join('');
-      const pool = d.aramPool || [];
-      $('bpPicks').innerHTML = pool.length
-        ? pool.map(hexPoolCard).join('')
-        : '<div class="msg">🎴 队友翻牌中 — 翻开的英雄进池后自动推荐</div>';
-      $('bpBans').innerHTML = '<div class="msg" style="border-color:rgba(11,198,227,.3)">🎲 海克斯大乱斗无 Ban 阶段 · 从共享池选人，推荐参考上方池内胜率与海克斯牌（详见 🃏 海克斯大乱斗 页）</div>';
-    } else {
-      $('bpPicksTitle').textContent = '🎯 推荐 Pick';
-      $('bpPicks').innerHTML = '<div class="msg">ℹ️ 当前模式（' + esc(d.modeLabel) + '）暂未支持</div>';
-      $('bpBans').innerHTML = '';
-    }
+    if (curPhase === 'Lobby') { await renderLobby(); return; }
+    if (curPhase === 'ChampSelect') { await renderChampSelect(); return; }
+    if (curPhase === 'GameStart') { await renderLoading(); return; }
+    if (curPhase === 'InProgress') { await renderGame(); return; }
+    await renderIdle();
   } catch (e) {
-    if (e.message === 'NOT_IN_CHAMPSELECT') {
-      if (curPhase === 'InProgress' || curPhase === 'GameStart') {
-        // 游戏中：显示海克斯选牌推荐（峡谷模式无牌可搜，提示即可）
-        $('bpMsg').textContent = '🎮 游戏中 — 下方为海克斯选牌推荐（3/7/11/14 级实时刷新）';
-        $('bpMsg').classList.remove('hidden');
-        $('bpBody').classList.add('hidden');
-        $('bpAugPhase').classList.remove('hidden');
-        refreshAugReco();
-      } else {
-        $('bpMsg').textContent = curPhase === 'Lobby'
-          ? '👥 队伍房间 — 队友已就位，等待选人开始'
-          : '⏳ 未在对局流程中 — 匹配成功进入队伍房间/选人后自动开始分析（自动刷新已开启）';
-        $('bpMsg').classList.remove('hidden');
-        $('bpBody').classList.add('hidden');
-        $('bpAugPhase').classList.add('hidden');
-      }
-    } else {
-      $('bpMsg').textContent = '❌ ' + e.message;
-      $('bpMsg').classList.remove('hidden');
-      $('bpBody').classList.add('hidden');
-      $('bpAugPhase').classList.add('hidden');
-    }
+    // 客户端短暂不可用 → 空闲视图，不打断轮询
+    await renderIdle();
   }
 }
-function startBP() {
-  loadBP(true);
-  if (bpTimer) clearInterval(bpTimer);
-  bpTimer = setInterval(loadBP, 4000);
+function startStage() {
+  renderStage(true);
+  if (stageTimer) clearInterval(stageTimer);
+  stageTimer = setInterval(renderStage, 3000);
 }
 
 /* ---------- 游戏内海克斯选牌推荐（3/7/11/14 级） ---------- */
@@ -721,16 +825,15 @@ async function loadHero() {
   } finally { btn.disabled = false; }
 }
 
-/* ---------- 加载画面 ---------- */
-let loadingTimer = null;
+/* ---------- 加载画面（并入对局流程视图） ---------- */
 async function loadLoading(force = false) {
   if (!force && !$('autoRefresh').checked) return;
   try {
     const d = await api('loading');
-    $('loadingMsg').classList.add('hidden');
-    $('loadingBody').classList.remove('hidden');
+    $('stLoadMsg').classList.add('hidden');
+    $('stLoadingBody').classList.remove('hidden');
     const teams = [100, 200];
-    $('loadingBody').innerHTML = `<div class="sub" style="margin-bottom:8px">模式: ${esc(d.gameMode)} · 自动刷新中</div>` +
+    $('stLoadingBody').innerHTML = `<div class="sub" style="margin-bottom:8px">模式: ${esc(d.gameMode)} · 加载中…</div>` +
       teams.map((team, ti) => {
         const ps = d.players.filter((p) => p.teamId === team);
         if (!ps.length) return '';
@@ -745,28 +848,17 @@ async function loadLoading(force = false) {
         </tr>`).join('')}</tbody></table>`;
       }).join('');
   } catch (e) {
-    if (e.message === 'NOT_IN_GAME') {
-      $('loadingMsg').textContent = '⏳ 不在对局中 — 进入加载画面后自动显示 10 人信息';
-      $('loadingMsg').classList.remove('hidden');
-      $('loadingBody').classList.add('hidden');
-    } else {
-      $('loadingMsg').textContent = '❌ ' + e.message;
-      $('loadingMsg').classList.remove('hidden');
-      $('loadingBody').classList.add('hidden');
-    }
+    $('stLoadMsg').textContent = e.message === 'NOT_IN_GAME' ? '⏳ 不在对局中' : '❌ ' + e.message;
+    $('stLoadMsg').classList.remove('hidden');
+    $('stLoadingBody').classList.add('hidden');
   }
-}
-function startLoading() {
-  loadLoading(true);
-  if (loadingTimer) clearInterval(loadingTimer);
-  loadingTimer = setInterval(loadLoading, 4000);
 }
 
 /* ---------- init ---------- */
 setInterval(lcuStatus, 3000);
 lcuStatus();
-startBP();
-startLoading();
+startStage();
+renderAugPicked();
 document.querySelector('#rankLane').addEventListener('change', loadRank);
 document.querySelector('#rankTier').addEventListener('change', loadRank);
 document.querySelector('#tabs button[data-tab="hex"]').addEventListener('click', loadHex);

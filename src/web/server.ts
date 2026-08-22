@@ -121,7 +121,7 @@ async function handleApi(route: string, params: URLSearchParams, res: ServerResp
           icon: m.profileIconId,
           isMe: m.summonerId === lobby.localMember?.summonerId,
         }));
-        ok(res, { queueId: lobby.gameConfig?.queueId, localSummonerId: lobby.localMember?.summonerId, members });
+        ok(res, { queueId: lobby.gameConfig?.queueId, modeLabel: queueToMode(lobby.gameConfig?.queueId ?? 0).label, localSummonerId: lobby.localMember?.summonerId, members });
       } catch (e) {
         fail(res, (e as Error).message);
       }
