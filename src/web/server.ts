@@ -8,7 +8,7 @@ import { recommendPick, inferLane } from '../services/pick.js';
 import { recommendBan } from '../services/ban.js';
 import { analyzeChampSelect } from '../services/champselect.js';
 import { recommendAugments, recommendHextechHeroes } from '../services/hextech.js';
-import { findLcuConnectionCached, getGameflowPhase, getGameflowSession, getRankedStats, getCurrentSummoner, lcuGet } from '../api/lcu.js';
+import { findLcuConnectionCached, getGameflowPhase, getGameflowSession, getRankedStats, getCurrentSummoner, lcuGet, queueToMode } from '../api/lcu.js';
 import { heroDisplayName } from '../models.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -202,6 +202,42 @@ async function handleApi(route: string, params: URLSearchParams, res: ServerResp
     }
     case 'hex/augments': {
       ok(res, await recommendAugments(Number(p('top') ?? 20)));
+      return;
+    }
+    case 'augment/search': {
+      const { searchAugments } = await import('../services/augments.js');
+      ok(res, await searchAugments(p('q') ?? ''));
+      return;
+    }
+    case 'augment/reco': {
+      // 可选牌 id（逗号分隔）+ 自动读游戏内我方阵容；无 ids 时返回当前游戏信息
+      const { recommendAugmentChoices } = await import('../services/augments.js');
+      const ids = (p('ids') ?? '').split(',').map(Number).filter((n) => n > 0);
+      // 我方英雄：游戏内自动读（InProgress/GameStart），否则空
+      let myHeroIds: number[] = [];
+      let phase = 'unknown';
+      let mode = '未知';
+      try {
+        phase = await getGameflowPhase();
+        if (phase === 'InProgress' || phase === 'GameStart') {
+          const g = await getGameflowSession();
+          const gm = g?.gameData?.gameMode ?? '';
+          mode = ({ ARAM: '海克斯大乱斗', ARAM_GAME: '海克斯大乱斗', CLASSIC: '峡谷', DEFAULT: '峡谷' })[gm] ?? (gm || '未知');
+          myHeroIds = [...new Set((g?.gameData?.players ?? []).filter((pl) => pl.teamId === 100 && pl.championId > 0).map((pl) => pl.championId))];
+        }
+      } catch { /* 客户端不可用 */ }
+      ok(res, {
+        phase,
+        mode,
+        myHeroIds,
+        heroNames: (await (async () => {
+          try {
+            const heroes = await getHeroList();
+            return Object.fromEntries(myHeroIds.map((id) => [id, heroes.get(id)?.title ?? `#${id}`]));
+          } catch { return {}; }
+        })()),
+        choices: ids.length ? await recommendAugmentChoices(ids, myHeroIds) : [],
+      });
       return;
     }
     default:

@@ -179,6 +179,19 @@
         </div>
       </div>
     </div>
+    <!-- 游戏内：海克斯选牌推荐（3/7/11/14 级） -->
+    <div class="card hidden" id="bpAugPhase" style="margin:0;border-color:rgba(11,198,227,.3)">
+      <h3 style="color:var(--cyan)">🎮 游戏内海克斯推荐 <span class="hint">3 级 / 7 级 / 11 级 / 14 级各选一次 · 每张牌至少可重抽一次</span></h3>
+      <div class="row" style="gap:8px;margin-bottom:8px">
+        <input type="text" id="augInput" placeholder="输入当前出现的牌名关键词（如：魔法飞弹），回车添加" style="flex:1;min-width:200px">
+        <button class="primary" id="augAddBtn" type="button">＋ 添加</button>
+        <button id="augRerollBtn" type="button" title="当前三张都不理想？点击重抽换三张，再把新牌名加进来">🔄 都不行？重抽</button>
+      </div>
+      <div class="sub" id="augMyHeroes" style="margin-bottom:6px"></div>
+      <div class="chips" id="augCand" style="margin-bottom:8px"></div>
+      <div class="chips" id="augPicked"></div>
+      <div class="grid" id="augResults" style="margin-top:10px"></div>
+    </div>
   </section>
 
   <!-- ===== 海克斯大乱斗 ===== -->
@@ -480,6 +493,7 @@ async function loadBP(force = false) {
     const d = await api('champselect');
     $('bpMsg').classList.add('hidden');
     $('bpBody').classList.remove('hidden');
+    $('bpAugPhase').classList.add('hidden');
     $('bpMyLane').textContent = `模式: ${d.modeLabel} · 段位: ${d.tierName}`;
     // 阶段横幅：阶段 + 倒计时 + 轮到谁
     $('bpTimerPhase').textContent = d.timerPhase;
@@ -528,15 +542,26 @@ async function loadBP(force = false) {
     }
   } catch (e) {
     if (e.message === 'NOT_IN_CHAMPSELECT') {
-      $('bpMsg').textContent = curPhase === 'GameStart' || curPhase === 'InProgress'
-        ? '🎬 对局加载中 — 10 人信息见「加载画面」面板'
-        : '⏳ 未在对局流程中 — 匹配成功进入队伍房间/选人后自动开始分析（自动刷新已开启）';
-      $('bpMsg').classList.remove('hidden');
-      $('bpBody').classList.add('hidden');
+      if (curPhase === 'InProgress' || curPhase === 'GameStart') {
+        // 游戏中：显示海克斯选牌推荐（峡谷模式无牌可搜，提示即可）
+        $('bpMsg').textContent = '🎮 游戏中 — 下方为海克斯选牌推荐（3/7/11/14 级实时刷新）';
+        $('bpMsg').classList.remove('hidden');
+        $('bpBody').classList.add('hidden');
+        $('bpAugPhase').classList.remove('hidden');
+        refreshAugReco();
+      } else {
+        $('bpMsg').textContent = curPhase === 'Lobby'
+          ? '👥 队伍房间 — 队友已就位，等待选人开始'
+          : '⏳ 未在对局流程中 — 匹配成功进入队伍房间/选人后自动开始分析（自动刷新已开启）';
+        $('bpMsg').classList.remove('hidden');
+        $('bpBody').classList.add('hidden');
+        $('bpAugPhase').classList.add('hidden');
+      }
     } else {
       $('bpMsg').textContent = '❌ ' + e.message;
       $('bpMsg').classList.remove('hidden');
       $('bpBody').classList.add('hidden');
+      $('bpAugPhase').classList.add('hidden');
     }
   }
 }
@@ -544,6 +569,74 @@ function startBP() {
   loadBP(true);
   if (bpTimer) clearInterval(bpTimer);
   bpTimer = setInterval(loadBP, 4000);
+}
+
+/* ---------- 游戏内海克斯选牌推荐（3/7/11/14 级） ---------- */
+let augPickedIds = [];
+const augNames = {};
+let augRecoTimer = null;
+let augLastTs = 0;
+const GRADE_COLOR = { S: '#ffd700', A: '#7cfc7c', B: '#5ad1ff', C: '#ffb347', D: '#9a9a9a' };
+const GRADE_TIP = { S: '无脑选', A: '强烈推荐', B: '不错', C: '一般', D: '尽量避免' };
+
+async function addAugment(kw) {
+  kw = (kw || '').trim();
+  if (!kw) return;
+  const hits = await api('augment/search?q=' + encodeURIComponent(kw));
+  if (!hits || !hits.length) { alert('未找到牌: ' + kw); return; }
+  if (hits.length > 1) {
+    // 多个候选：点击选择
+    $('augCand').innerHTML = '<span class="sub">候选（点击加入）:</span> ' + hits.slice(0, 8)
+      .map((h) => { augNames[h.augmentID] = h.name_cn; return `<span class="chip" style="cursor:pointer" onclick="pickAug(${h.augmentID})">${esc(h.name_cn)}</span>`; }).join('');
+    return;
+  }
+  augNames[hits[0].augmentID] = hits[0].name_cn;
+  pickAug(hits[0].augmentID);
+}
+
+function pickAug(id) {
+  if (!augPickedIds.includes(id)) augPickedIds.push(id);
+  $('augCand').innerHTML = '';
+  $('augInput').value = '';
+  renderAugPicked();
+  refreshAugReco(true);
+}
+
+function removeAug(id) {
+  augPickedIds = augPickedIds.filter((x) => x !== id);
+  renderAugPicked();
+  refreshAugReco(true);
+}
+
+function renderAugPicked() {
+  $('augPicked').innerHTML = augPickedIds.length
+    ? augPickedIds.map((id) => `<span class="chip" style="cursor:pointer" title="点击移除" onclick="removeAug(${id})">${esc(augNames[id] || '#' + id)} ✕</span>`).join('')
+    : '<span class="sub">还没有添加当前出现的牌 — 把三张牌名加进来（可用牌名关键词搜索）</span>';
+}
+
+async function refreshAugReco(force = false) {
+  const now = Date.now();
+  if (!force && now - augLastTs < 8000) return;
+  augLastTs = now;
+  const d = await api('augment/reco' + (augPickedIds.length ? '?ids=' + augPickedIds.join(',') : ''));
+  const myHeroes = (d.myHeroIds || []).map((id) => d.heroNames?.[id] || `#${id}`);
+  $('augMyHeroes').textContent = d.mode === '未知' && !d.myHeroIds.length
+    ? '（未在游戏中 — 评级仅按牌自身强度，进游戏后自动带上我方阵容适配）'
+    : `我方阵容: ${myHeroes.join('、') || '未知'} · 阶段: ${d.phase}`;
+  const recs = d.choices || [];
+  $('augResults').innerHTML = recs.length
+    ? recs.map((r) => `<div class="hero-card" style="border-color:${GRADE_COLOR[r.grade]}">
+        <div style="font-size:26px;font-weight:bold;color:${GRADE_COLOR[r.grade]}">${r.grade}</div>
+        <div class="counters" style="font-size:11px;color:${GRADE_COLOR[r.grade]}">${GRADE_TIP[r.grade]}</div>
+        <div class="name" style="margin:6px 0 4px">${esc(r.name)}</div>
+        <div class="counters">${r.level} · 胜率 ${Number.isFinite(r.winRate) ? r.winRate.toFixed(2) + '%' : '—'} · 出场 ${Number.isFinite(r.pickRate) ? r.pickRate.toFixed(2) + '%' : '—'}</div>
+        <div class="counters">命中阵容: ${r.matchedHeroes.length ? r.matchedHeroes.join('、') : '—'}</div>
+        <div class="counters" style="color:var(--gold)">适合: ${r.bestHeroes.slice(0, 3).join('、') || '—'}</div>
+        <div class="counters" style="color:var(--muted)">综合分 ${r.score}</div>
+      </div>`).join('')
+    : augPickedIds.length
+      ? '<div class="msg">正在分析…</div>'
+      : '<div class="msg">把当前出现的 3 张牌名加进来（用牌名关键词搜索），实时给出 S/A/B/C/D 评级推荐</div>';
 }
 
 /* ---------- Pick 手动 ---------- */
@@ -686,6 +779,12 @@ document.querySelector('#tabs button[data-tab="hex"]').addEventListener('click',
     }
   });
 });
+$('augAddBtn').addEventListener('click', () => addAugment($('augInput').value));
+$('augInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addAugment($('augInput').value); });
+$('augRerollBtn').addEventListener('click', () => {
+  alert('当前三张都不理想？点重抽按钮换三张，然后把新出现的牌名加进来重新评级。\n（每张牌至少有一次重抽机会，推荐只重抽评级 C 以下的牌）');
+});
+renderAugPicked();
 </script>
 </body>
 </html>

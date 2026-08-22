@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { computeBanRecommendations } from '../src/services/ban.js';
 import { computePickRecommendations, inferLane, normalizeLane } from '../src/services/pick.js';
 import { buildAramPool } from '../src/services/champselect.js';
+import { gradeAugmentChoices } from '../src/services/augments.js';
 import { tierNameToId, TIER_NAMES, type ChampionBase, type ChampionStat } from '../src/models.js';
 
 // ---------- 测试数据 ----------
@@ -211,4 +212,33 @@ test('buildAramPool：榜外英雄补空胜率，未翻牌为空池', () => {
   assert.equal(pool[0].title, '安妮');
   assert.equal(pool[0].winRate, null);             // 无榜数据
   assert.deepEqual(pool[0].bestAugments, []);
+});
+
+// ---------- 海克斯牌评分 ----------
+
+test('gradeAugmentChoices：阵容适配加分与 S/A/B/C/D 分级', () => {
+  const stats = [
+    { augmentId: 1, winRate: 0.55, pickRate: 0.1, pickRank: 1, pickRankChange: 0, winRank: 1, winRankChange: 0, bestHeroes: [5, 6] },   // 55% 适配亚索盖伦
+    { augmentId: 2, winRate: 0.53, pickRate: 0.05, pickRank: 2, pickRankChange: 0, winRank: 2, winRankChange: 0, bestHeroes: [1] },    // 53% 适配安妮
+    { augmentId: 3, winRate: 0.47, pickRate: 0.03, pickRank: 3, pickRankChange: 0, winRank: 3, winRankChange: 0, bestHeroes: [] },    // 47% 无适配
+  ];
+  const augments = new Map([
+    [1, { augmentID: 1, name_cn: '魔法飞弹', name_en: 'MM', level: 'kGold', tooltip: '', small_Icon: '', large_Icon: '' }],
+    [2, { augmentID: 2, name_cn: '风暴之怒', name_en: 'SF', level: 'kSilver', tooltip: '', small_Icon: '', large_Icon: '' }],
+    [3, { augmentID: 3, name_cn: '超频', name_en: 'OC', level: 'kPrismatic', tooltip: '', small_Icon: '', large_Icon: '' }],
+  ]);
+  const heroTitles = new Map([[5, '亚索'], [6, '盖伦'], [1, '安妮']]);
+  const recs = gradeAugmentChoices([1, 2, 3], [5, 1], stats, augments, heroTitles);
+  // 牌1: 55 + 1.2(亚索) = 56.2 -> S；牌2: 53 + 1.2(安妮) = 54.2 -> A；牌3: 47 -> D
+  assert.equal(recs[0].augmentId, 1);
+  assert.equal(recs[0].grade, 'S');
+  assert.deepEqual(recs[0].matchedHeroes, ['亚索']);
+  assert.equal(recs[1].augmentId, 2);
+  assert.equal(recs[1].grade, 'A');
+  assert.equal(recs[2].augmentId, 3);
+  assert.equal(recs[2].grade, 'D');
+  // 无阵容时按纯胜率
+  const noHero = gradeAugmentChoices([1, 2], [], stats, augments, heroTitles);
+  assert.equal(noHero[0].score, 55);
+  assert.equal(noHero[0].grade, 'A');
 });

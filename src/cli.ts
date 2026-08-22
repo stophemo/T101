@@ -429,6 +429,73 @@ program
   });
 
 program
+  .command('augment')
+  .description('游戏内海克斯牌选择推荐（3/7/11/14 级选牌，输入当前三张牌名）')
+  .argument('[names]', '当前可选牌名关键词，逗号分隔（如：魔法飞弹,风暴之怒,超频）')
+  .option('--heroes <names>', '手动指定我方英雄（逗号分隔），默认自动读游戏内我方阵容')
+  .action(async (names: string | undefined, opts: { heroes?: string }) => {
+    try {
+      const { searchAugments, recommendAugmentChoices } = await import('./services/augments.js');
+      const { getGameflowSession } = await import('./api/lcu.js');
+      if (!names) {
+        println('🎮 海克斯牌选择推荐 — 用法示例:');
+        println('  t101 augment 魔法飞弹,风暴之怒,超频');
+        println('  t101 augment 魔法飞弹 --heroes 卡特琳娜,亚索,盲僧');
+        println('（在游戏里选牌时，把当前出现的三张牌名输入即可，每张牌至少可重抽一次）');
+        return;
+      }
+      // 解析牌名 -> id
+      const ids: number[] = [];
+      const missing: string[] = [];
+      for (const kw of names.split(',').map((s) => s.trim()).filter(Boolean)) {
+        const hits = await searchAugments(kw);
+        if (!hits.length) { missing.push(kw); continue; }
+        if (hits.length > 1 && hits[0].name_cn !== kw && hits[0].name_en.toLowerCase() !== kw.toLowerCase()) {
+          println(`⚠️  "${kw}" 匹配到多个: ${hits.slice(0, 5).map((a) => a.name_cn).join('、')}，取第一个「${hits[0].name_cn}」`);
+        }
+        ids.push(hits[0].augmentID);
+      }
+      if (missing.length) println(`❌ 未找到牌: ${missing.join('、')}（可用 t101 hex 查看牌名）`);
+      if (!ids.length) return;
+      // 我方英雄：优先 --heroes，否则自动读游戏内阵容
+      let myHeroIds: number[] = [];
+      let myHeroNames = '';
+      const heroes = await getHeroList();
+      if (opts.heroes) {
+        const resolved = await resolveHeroes(opts.heroes.split(','));
+        myHeroIds = resolved.map((h) => h.heroId);
+        myHeroNames = resolved.map((h) => h.input).join('、');
+      } else {
+        const phase = await getGameflowPhase();
+        if (phase !== 'InProgress' && phase !== 'GameStart') {
+          println(`ℹ️  当前不在游戏中（阶段: ${phase}），推荐按「无阵容加成」计算；可用 --heroes 手动指定阵容`);
+        }
+        const g = await getGameflowSession().catch(() => null);
+        const players = g?.gameData?.players ?? [];
+        myHeroIds = [...new Set(players.filter((p) => p.teamId === 100 && p.championId > 0).map((p) => p.championId))];
+        myHeroNames = myHeroIds.map((id) => heroes.get(id)?.title ?? `#${id}`).join('、');
+      }
+      const recs = await recommendAugmentChoices(ids, myHeroIds);
+      println(`\n🎮 海克斯牌选择推荐（我方阵容: ${myHeroNames || '未知'}）`);
+      printTable(
+        [{ header: '评级', align: 'left' }, { header: '海克斯牌' }, { header: '品质' }, { header: '胜率', align: 'right' }, { header: '出场率', align: 'right' }, { header: '命中阵容' }, { header: '适合英雄' }],
+        recs.map((r) => [
+          r.grade, r.name, r.level,
+          Number.isFinite(r.winRate) ? pct(r.winRate) : '—',
+          Number.isFinite(r.pickRate) ? pct(r.pickRate) : '—',
+          r.matchedHeroes.join('、') || '—',
+          r.bestHeroes.join('、') || '—',
+        ]),
+      );
+      const best = recs[0];
+      if (best) println(`\n✅ 推荐选择: ${best.grade} ${best.name}（综合分 ${best.score}）`);
+    } catch (e) {
+      println(`❌ ${(e as Error).message}`);
+      process.exitCode = 1;
+    }
+  });
+
+program
   .command('cache')
   .description('缓存管理')
   .command('clear')

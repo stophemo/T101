@@ -69,6 +69,8 @@ let lastPhase = null;
 let lastBanCount = -1;
 let lastPickCount = -1;
 let lastActor = '';
+let lastDumpTs = 0;
+let probedAugEndpoints = false;
 
 log('👀 监控启动：等待客户端…');
 
@@ -104,6 +106,32 @@ setInterval(async () => {
       }
       if (phase === 'EndOfGame') log('   🏁 对局结束（继续监控下一把…）');
       lastPhase = phase;
+    } else if (phase === 'InProgress') {
+      // 游戏内：探测海克斯选项数据源（每 20s 节流），3/7/11/14 级选择窗口期重点观察
+      const now = Date.now();
+      if (!lastDumpTs || now - lastDumpTs > 20000) {
+        lastDumpTs = now;
+        const g = await lcuGet(conn, '/lol-gameflow/v1/session').catch(() => null);
+        const players = g?.gameData?.players || [];
+        if (players.length) {
+          const p0 = players[0];
+          const aug = Object.keys(p0).filter((k) => /augment|perk|rune/i.test(k));
+          const levels = players.map((p) => `${p.summonerName?.slice(0, 6) || '?'}:${p.level || '?'}`).join(' ');
+          const anyAug = players.some((p) => p.augmentSelections || p.augments || p.augmentIds);
+          log(`   [游戏内] 等级: ${levels}`);
+          if (aug.length || anyAug) log(`   ⚡ 玩家字段含海克斯: ${aug.join(',')} ${anyAug ? '(有数据!)' : ''} ${JSON.stringify(players[0]).slice(0, 400)}`);
+        }
+        // 候选端点探测（只测一次）
+        if (!probedAugEndpoints) {
+          probedAugEndpoints = true;
+          for (const ep of ['/lol-augments/v1/augments', '/lol-augments/v1/current-augments', '/lol-gameflow/v1/augments', '/lol-gameflow/v1/active-boosts']) {
+            try {
+              const d = await lcuGet(conn, ep);
+              log(`   ✅ 端点 ${ep} 可用: ${JSON.stringify(d).slice(0, 400)}`);
+            } catch { log(`   ❌ 端点 ${ep} 不可用`); }
+          }
+        }
+      }
     } else if (phase === 'ChampSelect') {
       // 选人进度：ban/pick 完成数 + 当前操作者
       const s = await lcuGet(conn, '/lol-champ-select/v1/session').catch(() => null);
