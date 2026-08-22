@@ -1,5 +1,8 @@
 // 数据模型：所有 API 数据源统一返回这里的类型
 
+/** 段位 id：255 全段位 / 10 王者 / 9 宗师 / 8 大师 / 7 钻石 / 6 翡翠 / 5 铂金 / 4 黄金 / 3 白银 / 2 青铜 / 1 黑铁 */
+export type TierId = 255 | 10 | 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1;
+
 /** 位置 */
 export type Lane = 'TOP' | 'JUNGLE' | 'MIDDLE' | 'BOTTOM' | 'SUPPORT' | 'ALL';
 
@@ -40,12 +43,47 @@ export interface ChampionStat {
   rankChange: number;
 }
 
-/** 对位克制（lol_101strategy_confront） */
+/** 对位克制（lol_101strategy_confront）
+ * high = 克制该英雄的（对面选它时，我们应该选这些）—— 该英雄的劣势对线
+ * low  = 被该英雄克制的 —— 该英雄的优势对线
+ * winRate 为对位胜率（%），如 58.91 */
 export interface ConfrontStats {
-  /** 克制该英雄的（对面选它时，我们应该选这些） */
-  high: { heroId: number; winRate: number }[];
-  /** 被该英雄克制的 */
-  low: { heroId: number; winRate: number }[];
+  high: { heroId: number; winRate: number; rank: number }[];
+  low: { heroId: number; winRate: number; rank: number }[];
+}
+
+/** 最佳拍档（lol_101strategy_partner）：与该英雄同队的组合胜率 */
+export interface PartnerInfo {
+  heroId: number;
+  /** 组合胜率 % */
+  winRate: number;
+  /** 组合出场数 */
+  games: number;
+  /** 组合胜场数 */
+  wins: number;
+}
+
+/** 单英雄分段强度（lol_101strategy_segment）：itier_胜率_登场率_禁用率 */
+export interface SegmentStat {
+  tier: TierId;
+  winRate: number;
+  pickRate: number;
+  banRate: number;
+}
+
+/** 段位 id -> 名称 */
+export const TIER_NAMES: Record<number, string> = {
+  255: '全段位', 10: '王者', 9: '宗师', 8: '大师', 7: '钻石', 6: '翡翠',
+  5: '铂金', 4: '黄金', 3: '白银', 2: '青铜', 1: '黑铁',
+};
+
+/** LCU 段位名 -> itier（CHALLENGER=王者 10 ... IRON=黑铁 1） */
+export function tierNameToId(name: string): number | null {
+  const map: Record<string, number> = {
+    CHALLENGER: 10, GRANDMASTER: 9, MASTER: 8, DIAMOND: 7, EMERALD: 6,
+    PLATINUM: 5, GOLD: 4, SILVER: 3, BRONZE: 2, IRON: 1,
+  };
+  return map[name.toUpperCase()] ?? null;
 }
 
 /** pick 推荐结果 */
@@ -59,6 +97,8 @@ export interface PickRecommendation {
   counters: string[];
   /** 克制了几个对面英雄 */
   counterCount: number;
+  /** 对位详情：它 vs 每个对面英雄的对位胜率（来自 confront high_op） */
+  matchups: { enemyTitle: string; winRate: number }[];
   /** 综合分（克制数 * 权重 + 胜率） */
   score: number;
 }
@@ -71,10 +111,14 @@ export interface BanRecommendation {
   pickRate: number;
   banRate: number;
   tier: string;
+  /** 主位置（场景 A 梯度榜按位置展示） */
+  lane?: Lane;
   /** 它克制了我方几个英雄 */
   threatensCount: number;
   /** 被它克制的我方英雄 */
   threatens: string[];
+  /** 威胁对位详情（场景 B）：它 vs 我方英雄的对位胜率 */
+  matchups?: { myTitle: string; winRate: number }[];
   /** 综合分 */
   score: number;
 }

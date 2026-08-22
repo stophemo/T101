@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getChampionRankings, getHeroList, getVersions, resolveHeroes, getConfront, type TierId } from '../api/cn101.js';
-import { recommendPick } from '../services/pick.js';
+import { recommendPick, inferLane } from '../services/pick.js';
 import { recommendBan } from '../services/ban.js';
 import { analyzeChampSelect } from '../services/champselect.js';
 import { recommendAugments, recommendHextechHeroes } from '../services/hextech.js';
@@ -88,12 +88,15 @@ async function handleApi(route: string, params: URLSearchParams, res: ServerResp
     case 'hero': {
       const name = p('name') ?? '';
       if (!name) { fail(res, '请输入英雄名'); return; }
-      const [{ heroId }, heroes, confront] = await Promise.all([
+      const [{ heroId }, heroes, rankings] = await Promise.all([
         (await resolveHeroes([name]))[0],
         getHeroList(),
-        import('../api/cn101.js').then((m) => m.getConfront),
+        getChampionRankings({ tier: tier(), lane: 'ALL' }),
       ]);
-      const stats = await confront(heroId, { tier: tier(), lane: lane() });
+      // 对位数据必须指定具体位置：ALL 时按榜单登场率推断主位置
+      const reqLane = lane();
+      const finalLane = reqLane === 'ALL' ? inferLane(rankings, heroId) : reqLane;
+      const stats = await getConfront(heroId, { tier: tier(), lane: finalLane });
       ok(res, {
         heroId,
         title: heroDisplayName(heroes.get(heroId), heroId),

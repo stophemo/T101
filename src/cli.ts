@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // lola — 英雄联盟国服 BP 助手
 import { execSync } from 'node:child_process';
+import http from 'node:http';
 import { startWebServer } from './web/server.js';
 
 // Windows 下把控制台切到 UTF-8，避免中文乱码
@@ -12,8 +13,8 @@ import { Command, InvalidArgumentError } from 'commander';
 import { getChampionRankings, getHeroList, getVersions, resolveHeroes, getConfront, type TierId } from './api/cn101.js';
 import { findLcuConnection, getGameflowPhase, getGameflowSession, getRankedStats, KNOWN_QUEUE_IDS } from './api/lcu.js';
 import { analyzeChampSelect } from './services/champselect.js';
-import { heroDisplayName } from './models.js';
-import { recommendPick } from './services/pick.js';
+import { heroDisplayName, TIER_NAMES } from './models.js';
+import { recommendPick, inferLane } from './services/pick.js';
 import { recommendBan } from './services/ban.js';
 import { printTable, println, pct, tierColor, rankChange } from './utils/table.js';
 import { cacheClear } from './utils/cache.js';
@@ -53,12 +54,12 @@ program
         println('没有找到推荐（检查对面英雄名是否输入正确）');
         return;
       }
-      println(`🎯 推荐 Pick（克制 ${enemy} 的英雄，按综合分排序）`);
+      println(`🎯 推荐 Pick（克制 ${enemy} · 段位 ${TIER_NAMES[opts.tier]} · 按对位胜率+段位强度综合排序）`);
       printTable(
-        [{ header: '#', align: 'right' }, { header: '英雄' }, { header: '位置' }, { header: '强度' }, { header: '胜率', align: 'right' }, { header: '克制对象' }],
+        [{ header: '#', align: 'right' }, { header: '英雄' }, { header: '位置' }, { header: '强度' }, { header: '胜率', align: 'right' }, { header: '对位（vs 对面，%越高越好）' }],
         recs.map((r, i) => [
           i + 1, r.title, r.lane, tierColor(r.tier), pct(r.winRate),
-          r.counters.join('、') + `（${r.counterCount}个）`,
+          r.matchups.map((m) => `${m.enemyTitle} ${m.winRate.toFixed(1)}%`).join('、'),
         ]),
       );
     } catch (e) {
@@ -82,18 +83,30 @@ program
         opts: { tier: opts.tier },
       });
       const withMyTeam = !!my;
-      println(withMyTeam ? '🛡️ 推荐 Ban（克制我方阵容最多的英雄）' : '🛡️ 推荐 Ban（版本强势/高禁用英雄）');
-      printTable(
-        [
-          { header: '#', align: 'right' }, { header: '英雄' }, { header: '强度' },
-          { header: '胜率', align: 'right' }, { header: '登场', align: 'right' }, { header: '禁用', align: 'right' },
-          ...(withMyTeam ? [{ header: '威胁我方' }] : []),
-        ],
-        recs.map((r, i) => [
-          i + 1, r.title, tierColor(r.tier), pct(r.winRate), pct(r.pickRate), pct(r.banRate),
-          ...(withMyTeam ? [r.threatens.join('、') + `（${r.threatensCount}个）`] : []),
-        ]),
-      );
+      if (withMyTeam) {
+        println(`🛡️ 推荐 Ban（克制我方阵容最多的英雄 · 段位 ${TIER_NAMES[opts.tier]}）`);
+        printTable(
+          [
+            { header: '#', align: 'right' }, { header: '英雄' }, { header: '位置' }, { header: '强度' },
+            { header: '胜率', align: 'right' }, { header: '禁用', align: 'right' }, { header: '威胁我方（对位胜率）' },
+          ],
+          recs.map((r, i) => [
+            i + 1, r.title, r.lane ?? '-', tierColor(r.tier), pct(r.winRate), pct(r.banRate),
+            (r.matchups ?? []).map((m) => `${m.myTitle} ${m.winRate.toFixed(1)}%`).join('、') || '-',
+          ]),
+        );
+      } else {
+        println(`🛡️ 版本梯度榜（T0→T2 优先 · 段位 ${TIER_NAMES[opts.tier]} · 按强度+禁用率排序，优先 ban）`);
+        printTable(
+          [
+            { header: '#', align: 'right' }, { header: '英雄' }, { header: '位置' }, { header: '强度' },
+            { header: '胜率', align: 'right' }, { header: '登场', align: 'right' }, { header: '禁用', align: 'right' },
+          ],
+          recs.map((r, i) => [
+            i + 1, r.title, r.lane ?? '-', tierColor(r.tier), pct(r.winRate), pct(r.pickRate), pct(r.banRate),
+          ]),
+        );
+      }
     } catch (e) {
       println(`❌ ${(e as Error).message}`);
       process.exitCode = 1;
@@ -132,7 +145,7 @@ program
   .command('hero')
   .description('对位克制查询：某英雄被谁克制 / 克制谁')
   .argument('<hero>', '英雄名（中文/英文/ID）')
-  .option('-l, --lane <lane>', '位置', 'ALL')
+  .option('-l, --lane <lane>', '位置（默认按榜单推断主位置）', 'ALL')
   .option('-t, --tier <id>', '段位过滤', parseTier, 255)
   .option('--no-color', '禁用颜色')
   .action(async (hero: string, opts) => {
@@ -141,9 +154,14 @@ program
         (await resolveHeroes([hero]))[0],
         getHeroList(),
       ]);
-      const stats = await getConfront(heroId, { tier: opts.tier, lane: opts.lane.toUpperCase() });
+      // 对位数据必须指定具体位置：ALL 时按该英雄在榜单中登场率最高的位置
+      const lane = opts.lane.toUpperCase();
+      const finalLane = lane === 'ALL'
+        ? inferLane(await getChampionRankings({ tier: opts.tier, lane: 'ALL' }), heroId)
+        : lane;
+      const stats = await getConfront(heroId, { tier: opts.tier, lane: finalLane });
       const title = heroDisplayName(heroes.get(heroId), heroId);
-      println(`⚔️ ${title} 的对位克制（${opts.lane.toUpperCase()}）`);
+      println(`⚔️ ${title} 的对位克制（${finalLane}）`);
       if (stats.high.length) {
         println(`\n克制 ${title} 的英雄（对面选 ${title} 时，可考虑这些）：`);
         printTable(
@@ -198,7 +216,7 @@ program
       try {
         const a = await analyzeChampSelect();
         const heroes = await getHeroList();
-        println(`⏱️  选人阶段: ${a.phase} · 模式: ${a.modeLabel} · 我方位置: ${a.myLane === 'ALL' ? '未分配' : a.myLane}`);
+        println(`⏱️  选人阶段: ${a.phase} · 模式: ${a.modeLabel} · 段位: ${a.tierName} · 我方位置: ${a.myLane === 'ALL' ? '未分配' : a.myLane}`);
         if (a.mode === 'hextech_aram' && a.queueId !== undefined && !KNOWN_QUEUE_IDS.has(a.queueId)) {
           println(`ℹ️  队列 id=${a.queueId} 不在已知列表，已按海克斯大乱斗处理（如与实际不符请反馈）`);
         }
@@ -222,20 +240,26 @@ program
 
         if (a.enemyPicks.length) {
           println(`\n👹 对面已选: ${a.enemyPicks.map((id) => heroDisplayName(heroes.get(id), id)).join('、')}`);
-          println(`🎯 推荐 Pick（克制对面，按综合分排序）`);
+          println(`🎯 推荐 Pick（按对位胜率+${a.tierName}段位强度综合排序）`);
           printTable(
-            [{ header: '#', align: 'right' }, { header: '英雄' }, { header: '位置' }, { header: '强度' }, { header: '胜率', align: 'right' }, { header: '克制对象' }],
-            a.picks.map((r, i) => [i + 1, r.title, r.lane, tierColor(r.tier), pct(r.winRate), r.counters.join('、')]),
+            [{ header: '#', align: 'right' }, { header: '英雄' }, { header: '位置' }, { header: '强度' }, { header: '胜率', align: 'right' }, { header: '对位（vs 对面，%越高越好）' }],
+            a.picks.map((r, i) => [
+              i + 1, r.title, r.lane, tierColor(r.tier), pct(r.winRate),
+              r.matchups.map((m) => `${m.enemyTitle} ${m.winRate.toFixed(1)}%`).join('、'),
+            ]),
           );
         } else {
           println('\n👹 对面还没选英雄');
         }
 
         if (a.myPicks.length) {
-          println(`\n🛡️ 推荐 Ban（克制我方 ${a.myPicks.map((id) => heroDisplayName(heroes.get(id), id)).join('、')}）`);
+          println(`\n🛡️ 推荐 Ban（克制我方 ${a.myPicks.map((id) => heroDisplayName(heroes.get(id), id)).join('、')} · ${a.tierName}）`);
           printTable(
-            [{ header: '#', align: 'right' }, { header: '英雄' }, { header: '胜率', align: 'right' }, { header: '禁用率', align: 'right' }, { header: '威胁我方' }],
-            a.bans.map((r, i) => [i + 1, r.title, pct(r.winRate), pct(r.banRate), r.threatens.join('、')]),
+            [{ header: '#', align: 'right' }, { header: '英雄' }, { header: '位置' }, { header: '胜率', align: 'right' }, { header: '禁用率', align: 'right' }, { header: '威胁我方（对位胜率）' }],
+            a.bans.map((r, i) => [
+              i + 1, r.title, r.lane ?? '-', pct(r.winRate), pct(r.banRate),
+              (r.matchups ?? []).map((m) => `${m.myTitle} ${m.winRate.toFixed(1)}%`).join('、') || '-',
+            ]),
           );
         } else {
           println('\n🛡️ 我方还没选英雄（选完英雄后自动给出 Ban 建议）');
@@ -318,6 +342,20 @@ program
     }
   });
 
+/** 检测端口上是否已有 lola Web 实例在运行（避免重复启动/重复开标签页） */
+function isLolaWebRunning(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const req = http.get({ host: '127.0.0.1', port, path: '/', timeout: 800 }, (res) => {
+      let data = '';
+      res.on('data', (c) => { data += c; if (data.length > 4000) res.destroy(); });
+      res.on('end', () => resolve(data.includes('LOLA')));
+      res.on('error', () => resolve(false));
+    });
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => { req.destroy(); resolve(false); });
+  });
+}
+
 program
   .command('web')
   .description('启动 Web 界面（浏览器打开，含 BP 助手/榜单/加载画面等全部功能）')
@@ -325,12 +363,21 @@ program
   .option('--no-open', '不自动打开浏览器')
   .action(async (opts) => {
     const port = Number(opts.port);
+    const url = `http://127.0.0.1:${port}`;
+    // 已有 lola 实例在运行：直接提示，不重复启动、不重复开标签页
+    if (await isLolaWebRunning(port)) {
+      println(`ℹ️ LOLA Web 已在运行: ${url}`);
+      println('   直接打开浏览器访问即可，或 Ctrl+C 退出本命令');
+      return;
+    }
+    // watch 模式（npm run web:watch）：代码变更会重启进程，自动开浏览器会不断新增标签页，故跳过
+    const isWatch = process.env.npm_lifecycle_event === 'web:watch';
     // startWebServer 内部绑定 127.0.0.1（仅本机可访问）并在就绪时回调
-    startWebServer(port, (url) => {
-      println(`🌐 LOLA Web 界面已启动: ${url}`);
+    startWebServer(port, (url2) => {
+      println(`🌐 LOLA Web 界面已启动: ${url2}`);
       println('   Ctrl+C 停止服务');
-      if (opts.open) {
-        try { execSync(`start ${url}`, { stdio: 'ignore', windowsHide: true }); } catch { /* ignore */ }
+      if (opts.open && !isWatch) {
+        try { execSync(`start ${url2}`, { stdio: 'ignore', windowsHide: true }); } catch { /* ignore */ }
       }
     });
   });

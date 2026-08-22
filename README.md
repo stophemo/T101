@@ -69,6 +69,9 @@ lol-assistant/
 | `GET .../lol_101strategy?itier=255&version_id=16.16&lane=ALL&sort_metric=1&sort_order=2` | 全英雄榜单：胜率/登场率/禁用率/T级/克制列表 | ✅ 每行 `排名_英雄id_T级_位置_胜率_登场率_禁用率_克制英雄ids_排名变化` |
 | `GET .../lol_101strategy_confront?itier=255&championid=63&lane=SUPPORT&version_id=16.16` | 单英雄对位克制（high_op/low_op） | ✅ 返回克制它/被它克制的英雄+胜率 |
 | `GET https://game.gtimg.cn/images/lol/act/img/js/heroList/hero_list.js` | 英雄中文名/英文名/id 映射 | ✅ 静态文件，量大可本地缓存 |
+| `GET .../lol_101strategy_confront?itier=255&championid=55&lane=MIDDLE&version_id=16.16` | 单英雄对位（英雄详情页同源）：high_op=它的劣势对线（选这些克制它）、low_op=它的优势对线 | ✅ 带精确对位胜率，lane 必须为具体位置 |
+| `GET .../lol_101strategy_partner?championid=55&lane=MIDDLE` | 最佳拍档：与该英雄同队的组合胜率 | ✅ `rank_heroId_组合胜率_场数_胜场` |
+| `GET .../lol_101strategy_segment?championid=55&lane=MIDDLE` | 单英雄各段位强度：`itier_胜率_登场率_禁用率` | ✅ 与榜单全段位数据互相印证 |
 | `GET .../fuwen_aram_hero_rank_v2?dtstatdate=YYYYMMDD` | 海克斯大乱斗英雄榜 | ✅ 按日更新、延迟一天（自动回退） |
 | `GET .../fuwen_aram_rune_rank_v2?dtstatdate=YYYYMMDD` | 海克斯牌榜 | ✅ 同上 |
 
@@ -94,6 +97,28 @@ OP.GG **不覆盖国服**，仅作参考（韩服强势英雄）。其 `api/v1.0
 - **内置 fetch**，无 HTTP 依赖；`data/cache.json` 本地缓存（榜单 6h / 英雄表 30 天，内存常驻 + 防抖落盘）
 - **npm link** 全局安装后可直接敲 `lola` 命令；Windows 下自动 `chcp 65001` 避免中文乱码
 - Web 服务零依赖（`node:http` + 原生前端），**仅绑定 127.0.0.1**（不暴露到局域网）
+
+## BP 算法（v2：对位驱动）
+
+### Pick 推荐
+1. 对面英雄各自位置：LCU 场景用 assignedPosition；手动输入按榜单登场率推断主位置
+2. 对每个对面英雄查**对位接口**（与官网 hero-detail 页同源）：high_op = 它的劣势对线（选这些英雄打卡特琳娜有 57~71% 胜率）
+3. 候选 = 所有对位克星的并集，按（克制数 → 平均对位胜率 → 段位榜单胜率）综合排序
+4. 展示：英雄/位置/段位强度 T 级/段位胜率/**逐对位胜率**（如 `卡特琳娜 58.9%`）
+
+> ⚠️ v1 曾用榜单 `counters` 字段（每行克制列表），实测质量差（如卡特琳娜的 counters 含加里奥——实际被卡特克），已弃用。
+
+### Ban 建议
+- **无我方阵容**：版本梯度榜——按段位拉全位置榜单，T0→T2 梯度优先，组内按禁用率+胜率排序（优先 ban 版本强势）
+- **有我方阵容**：对位威胁分析——查每个我方英雄的 low_op（被谁克制），候选按（威胁数 → 对位胜率 → 版本禁用率加权）排序，展示 `亚索 41.8%`（我方英雄 vs 威胁英雄的对位胜率，<50% 即被克）
+
+### 段位自动适配
+- LCU 场景自动读取当前账号段位（单双排优先）→ 映射为 itier（王者 10 … 黑铁 1）
+- 榜单/对位/分段数据全部按该段位查询（如钻石分段卡特琳娜的对位克星与全段位差异明显）
+- 查不到段位（未排位/客户端差异）时自动回退全段位 255；手动命令可用 `-t` 指定
+
+### 最佳拍档
+`lola hero` 与 Web 面板可查拍档数据（组合胜率），后续可在选人时推荐队友组合。
 
 ## 使用（Phase 1 + Phase 2 已完成 ✅）
 

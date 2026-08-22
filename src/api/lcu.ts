@@ -5,6 +5,7 @@ import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import https from 'node:https';
+import { tierNameToId } from '../models.js';
 
 interface LcuConnection {
   port: number;
@@ -150,6 +151,19 @@ export async function getSummoner(summonerId: number) {
 }
 
 // ---------- 选人阶段 ----------
+
+/** 当前登录召唤师的段位 -> itier（无排位/查询失败返回 null）；用于 BP 按分段推荐 */
+export async function getMyTierId(): Promise<number | null> {
+  try {
+    const me = await getCurrentSummoner();
+    const stats = await getRankedStats(me.summonerId);
+    if (!stats) return null;
+    const solo = stats.find((q) => q.queue.includes('RANKED_SOLO')) ?? stats[0];
+    return tierNameToId(solo.tier);
+  } catch {
+    return null;
+  }
+}
 
 export interface ChampSelectPlayer {
   summonerId: number;

@@ -290,10 +290,15 @@ function heroCard(h, { rank, extra } = {}) {
 }
 
 function pickExtra(h) {
-  return h.counterCount ? `克制 ${esc(h.counters.join('、'))}` : '';
+  if (!h.counterCount) return '';
+  const mu = (h.matchups || []).map((m) => `${m.enemyTitle} ${m.winRate.toFixed(1)}%`).join('、');
+  return `对位 ${mu}`;
 }
 function banExtra(h) {
-  return h.threatensCount ? `威胁: ${esc(h.threatens.join('、'))}` : `禁用率 ${h.banRate.toFixed ? h.banRate.toFixed(1) : h.banRate}%`;
+  if (h.matchups && h.matchups.length) {
+    return `威胁: ${h.matchups.map((m) => `${m.myTitle} ${m.winRate.toFixed(1)}%`).join('、')}`;
+  }
+  return `禁用率 ${h.banRate.toFixed ? h.banRate.toFixed(1) : h.banRate}%`;
 }
 function chip(alias, name, color) {
   return `<span class="chip ${color}"><img src="${heroImg(alias)}" onerror="this.style.visibility='hidden'">${esc(name)}</span>`;
@@ -367,7 +372,7 @@ async function loadBP(force = false) {
     const d = await api('champselect');
     $('bpMsg').classList.add('hidden');
     $('bpBody').classList.remove('hidden');
-    $('bpMyLane').textContent = `模式: ${d.modeLabel}`;
+    $('bpMyLane').textContent = `模式: ${d.modeLabel} · 段位: ${d.tierName}`;
     const chipB = (id, color) => chip(d.heroAliases[id] || '', d.heroNames[id] || String(id), color);
     $('bpEnemyBans').innerHTML = d.enemyBans.length ? d.enemyBans.map((id) => chipB(id, 'red')).join('') : '—';
     $('bpMyBans').innerHTML = d.myBans.length ? d.myBans.map((id) => chipB(id, 'blue')).join('') : '—';

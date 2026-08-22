@@ -1,7 +1,9 @@
 // 101.qq.com 官方数据接口客户端（国服）
 // 已实测验证：https://mlol.qt.qq.com 免 Key 免鉴权
 import { cacheGet, cacheSet } from '../utils/cache.js';
-import type { AugmentInfo, ChampionBase, ChampionStat, ConfrontStats, HextechHeroStat, HextechRuneStat, Lane } from '../models.js';
+import type { AugmentInfo, ChampionBase, ChampionStat, ConfrontStats, HextechHeroStat, HextechRuneStat, Lane, PartnerInfo, SegmentStat, TierId } from '../models.js';
+
+export type { TierId } from '../models.js';
 
 const BASE = 'https://mlol.qt.qq.com';
 const HERO_LIST_URL = 'https://game.gtimg.cn/images/lol/act/img/js/heroList/hero_list.js';
@@ -12,7 +14,6 @@ const HEADERS = {
 };
 
 /** 段位 id：255 全段位 / 10 王者 / 9 宗师 / 8 大师 / 7 钻石 / 6 翡翠 / 5 铂金 / 4 黄金 / 3 白银 / 2 青铜 / 1 黑铁 */
-export type TierId = 255 | 10 | 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1;
 
 export interface VersionInfo {
   id: string;
@@ -106,11 +107,15 @@ export async function getChampionRankings(opts: RankOptions = {}, force = false)
 
 // ---------- 对位克制 ----------
 
-/** 单英雄对位克制：high=克制它的，low=被它克制的 */
+const CONFRONT_LANES: Lane[] = ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'SUPPORT'];
+
+/** 单英雄对位克制：high=克制它的（劣势对线），low=被它克制的（优势对线）
+ * 注意：lane 必须为具体位置（实测 lane=ALL 返回空） */
 export async function getConfront(heroId: number, opts: RankOptions = {}, force = false): Promise<ConfrontStats> {
   const version = opts.version ?? (await getLatestVersion()).name;
   const tier = opts.tier ?? 255;
-  const lane = opts.lane ?? 'ALL';
+  const lane = opts.lane ?? 'MIDDLE';
+  if (lane === 'ALL') throw new Error('对位数据必须指定具体位置（TOP/JUNGLE/MIDDLE/BOTTOM/SUPPORT）');
   const key = `confront:${heroId}:${tier}:${lane}:${version}`;
   if (!force) {
     const hit = cacheGet<ConfrontStats>(key, 24);
@@ -131,6 +136,63 @@ export async function getConfront(heroId: number, opts: RankOptions = {}, force 
     low = parse(obj.low_op_details ?? '');
   }
   const result = { high, low };
+  cacheSet(key, result);
+  return result;
+}
+
+/** 最佳拍档（lol_101strategy_partner）：与该英雄同队时的组合胜率；lane 必须为具体位置 */
+export async function getPartner(heroId: number, opts: RankOptions = {}, force = false): Promise<PartnerInfo[]> {
+  const version = opts.version ?? (await getLatestVersion()).name;
+  const tier = opts.tier ?? 255;
+  const lane = opts.lane ?? 'MIDDLE';
+  if (lane === 'ALL') throw new Error('拍档数据必须指定具体位置（TOP/JUNGLE/MIDDLE/BOTTOM/SUPPORT）');
+  const key = `partner:${heroId}:${tier}:${lane}:${version}`;
+  if (!force) {
+    const hit = cacheGet<PartnerInfo[]>(key, 24);
+    if (hit) return hit;
+  }
+  const raw = await get<string>('/go/battle_info/odp_proxy/lol_101strategy_partner', {
+    itier: tier, championid: heroId, lane, version_id: version, zone: 'lol', from: 'h5',
+  });
+  // data_details 格式：rank_heroId_组合胜率_出场数_胜场数#...
+  const obj = raw ? (JSON.parse(raw) as { data_details?: string }) : null;
+  const result = (obj?.data_details ?? '').split('#').filter(Boolean).map((line) => {
+    const [rank, heroId2, winRate, games, wins] = line.split('_');
+    return {
+      heroId: parseInt(heroId2, 10),
+      winRate: parseFloat(winRate),
+      games: parseInt(games ?? '0', 10),
+      wins: parseInt(wins ?? '0', 10),
+    };
+  });
+  cacheSet(key, result);
+  return result;
+}
+
+/** 单英雄分段强度（lol_101strategy_segment）：各段位胜率/登场率/禁用率；lane 必须为具体位置 */
+export async function getSegment(heroId: number, opts: RankOptions = {}, force = false): Promise<SegmentStat[]> {
+  const version = opts.version ?? (await getLatestVersion()).name;
+  const lane = opts.lane ?? 'MIDDLE';
+  if (lane === 'ALL') throw new Error('分段数据必须指定具体位置（TOP/JUNGLE/MIDDLE/BOTTOM/SUPPORT）');
+  const key = `segment:${heroId}:${lane}:${version}`;
+  if (!force) {
+    const hit = cacheGet<SegmentStat[]>(key, 24);
+    if (hit) return hit;
+  }
+  const raw = await get<string>('/go/battle_info/odp_proxy/lol_101strategy_segment', {
+    itier: 255, championid: heroId, lane, version_id: version, zone: 'lol', from: 'h5',
+  });
+  // datadetails 格式：itier_胜率_登场率_禁用率#...
+  const obj = raw ? (JSON.parse(raw) as { datadetails?: string }) : null;
+  const result = (obj?.datadetails ?? '').split('#').filter(Boolean).map((line) => {
+    const [tier, winRate, pickRate, banRate] = line.split('_');
+    return {
+      tier: parseInt(tier, 10) as TierId,
+      winRate: parseFloat(winRate),
+      pickRate: parseFloat(pickRate),
+      banRate: parseFloat(banRate),
+    };
+  });
   cacheSet(key, result);
   return result;
 }
