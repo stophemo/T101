@@ -8,7 +8,7 @@ import { recommendPick, inferLane } from '../services/pick.js';
 import { recommendBan } from '../services/ban.js';
 import { analyzeChampSelect } from '../services/champselect.js';
 import { recommendAugments, recommendHextechHeroes } from '../services/hextech.js';
-import { findLcuConnectionCached, getGameflowPhase, getGameflowSession, getRankedStats, getCurrentSummoner, lcuGet, queueToMode, getPlayerRecentStats, type PlayerRecentStats } from '../api/lcu.js';
+import { findLcuConnectionCached, getGameflowPhase, getGameflowSession, getRankedStats, getCurrentSummoner, lcuGet, queueToMode, getPlayerRecentStats, getSummoner, summonerDisplayName, type PlayerRecentStats } from '../api/lcu.js';
 import { heroDisplayName } from '../models.js';
 import { evaluateRecentStats, evaluateTeam } from '../services/player.js';
 
@@ -21,6 +21,18 @@ async function getCachedRecentStats(summonerId: number): Promise<PlayerRecentSta
   const data = await getPlayerRecentStats(summonerId);
   recentStatsCache.set(summonerId, { data, ts: Date.now() });
   return data;
+}
+
+/** 召唤师信息缓存（国服 lobby members 无昵称字段，需补查；60s TTL） */
+const summonerCache = new Map<number, { name: string; icon: number | null; level: number | null; ts: number }>();
+async function getCachedSummonerInfo(summonerId: number): Promise<{ name: string; icon: number | null; level: number | null }> {
+  const hit = summonerCache.get(summonerId);
+  if (hit && Date.now() - hit.ts < RECENT_TTL_MS) return hit;
+  const fallback = { name: `召唤师${summonerId}`, icon: null, level: null };
+  const s = await getSummoner(summonerId).catch(() => null);
+  const info = s ? { name: summonerDisplayName(s) || fallback.name, icon: s.profileIconId ?? null, level: s.summonerLevel ?? null } : fallback;
+  summonerCache.set(summonerId, { ...info, ts: Date.now() });
+  return info;
 }
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -123,20 +135,33 @@ async function handleApi(route: string, params: URLSearchParams, res: ServerResp
       try {
         const lobby = await lcuGet<{
           localMember?: { summonerId: number; gameName?: string; displayName?: string; summonerLevel?: number; profileIconId?: number };
-          members?: { summonerId: number; gameName?: string; displayName?: string; summonerLevel?: number; profileIconId?: number }[];
+          members?: { summonerId: number; gameName?: string; displayName?: string; summonerLevel?: number; profileIconId?: number; summonerIconId?: number }[];
           gameConfig?: { queueId?: number };
         }>('/lol-lobby/v2/lobby');
         const queueId = lobby.gameConfig?.queueId;
         const members = (lobby.members ?? []).map((m) => ({
           summonerId: m.summonerId,
-          name: m.displayName || m.gameName || `召唤师${m.summonerId}`,
+          name: m.displayName || m.gameName || '',
           level: m.summonerLevel,
-          icon: m.profileIconId,
+          icon: m.profileIconId ?? m.summonerIconId,
           isMe: m.summonerId === lobby.localMember?.summonerId,
         }));
+        // 国服 lobby 无昵称字段：缺名成员补查召唤师信息（缓存 60s）
+        const missing = members.filter((m) => !m.name);
+        const infos = await Promise.all(missing.map((m) => getCachedSummonerInfo(m.summonerId)));
+        const nameMap = new Map(missing.map((m, i) => [m.summonerId, infos[i]]));
+        const members2 = members.map((m) => {
+          const info = nameMap.get(m.summonerId);
+          return {
+            ...m,
+            name: m.name || info?.name || `召唤师${m.summonerId}`,
+            level: m.level ?? info?.level,
+            icon: m.icon ?? info?.icon,
+          };
+        });
         // 近期战绩（60s 缓存：房间 3s 轮询，不能每轮都打 match-history）
-        const stats = await Promise.all(members.map((m) => getCachedRecentStats(m.summonerId)));
-        const enriched = members.map((m, i) => {
+        const stats = await Promise.all(members2.map((m) => getCachedRecentStats(m.summonerId)));
+        const enriched = members2.map((m, i) => {
           const s = stats[i];
           return { ...m, stats: s ? evaluateRecentStats(s, queueId) : null };
         });

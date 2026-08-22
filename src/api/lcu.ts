@@ -137,15 +137,29 @@ export async function getGameflowPhase(): Promise<string> {
 }
 
 /** 当前登录的召唤师 */
-export async function getCurrentSummoner() {
-  return lcuGet<{ displayName: string; gameName?: string; summonerId: number; puuid: string; summonerLevel: number; profileIconId: number }>(
+/** 召唤师信息（国服 displayName 为空，昵称在 gameName） */
+export interface SummonerInfo {
+  displayName: string;
+  gameName?: string;
+  summonerId: number;
+  puuid: string;
+  summonerLevel: number;
+  profileIconId: number;
+}
+
+/** 展示名：displayName 优先，国服退回 gameName */
+export const summonerDisplayName = (s: Pick<SummonerInfo, 'displayName' | 'gameName'> | null | undefined): string =>
+  s?.displayName || s?.gameName || '';
+
+export async function getCurrentSummoner(): Promise<SummonerInfo> {
+  return lcuGet<SummonerInfo>(
     '/lol-summoner/v1/current-summoner',
   );
 }
 
 /** 按 summonerId 查召唤师信息 */
-export async function getSummoner(summonerId: number) {
-  return lcuGet<{ displayName: string; summonerId: number; puuid: string; summonerLevel: number; profileIconId: number }>(
+export async function getSummoner(summonerId: number): Promise<SummonerInfo> {
+  return lcuGet<SummonerInfo>(
     `/lol-summoner/v1/summoners/${summonerId}`,
   );
 }
@@ -188,7 +202,11 @@ export interface ChampSelectSession {
 }
 
 /** 队列 id -> 模式（queueId 常见值：420 单双排 / 440 灵活排位 / 430 匹配 / 400 盲选 / 450 普通大乱斗） */
-export const KNOWN_QUEUE_IDS = new Set([420, 440, 450, 430, 400, 490]);
+export const KNOWN_QUEUE_IDS = new Set([420, 440, 450, 430, 400, 490, 2400]);
+
+/** 队列 id → 模式（2400 = 海克斯大乱斗，实战确认 gameMode=KIWI） */
+/** 未知 queueId：视为海克斯大乱斗（海克斯大乱斗无 ban 阶段、独立 queue；待实战确认具体 id） */
+/** 误判风险：若普通大乱斗/新模式改用了新 id 会被当成海克斯。CLI/Web 会显示 queueId 便于反馈 */
 
 /** 队列 id -> 模式（queueId 常见值：420 单双排 / 440 灵活排位 / 430 匹配 / 400 盲选 / 450 普通大乱斗） */
 /** 单场对局简况（从 match-history 解析） */
@@ -247,7 +265,7 @@ export async function getPlayerRecentStats(summonerId: number): Promise<PlayerRe
     if (!recent.length) return null;
     return {
       summonerId,
-      name: s.displayName,
+      name: summonerDisplayName(s),
       icon: s.profileIconId ?? null,
       totalGames: recent.length,
       wins: recent.filter((r) => r.win).length,
@@ -272,6 +290,7 @@ export function queueToMode(queueId: number | undefined): {
     case 440: return { mode: 'ranked_flex', label: '灵活排位' };
     case 450: return { mode: 'aram', label: '普通大乱斗' };
     case 430: case 400: case 490: return { mode: 'normal', label: '匹配' };
+    case 2400: return { mode: 'hextech_aram', label: '海克斯大乱斗' };
     // 未知 queueId：视为海克斯大乱斗（海克斯大乱斗无 ban 阶段、独立 queue；待实战确认具体 id）
     // 误判风险：若普通大乱斗/新模式改用了新 id 会被当成海克斯。CLI/Web 会显示 queueId 便于反馈
     default: return { mode: 'hextech_aram', label: '海克斯大乱斗' };
