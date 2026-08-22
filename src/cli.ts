@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// lola — 英雄联盟国服 BP 助手
+// t101 — 英雄联盟国服 BP 助手
 import { execSync } from 'node:child_process';
 import http from 'node:http';
 import { startWebServer } from './web/server.js';
@@ -28,9 +28,9 @@ function parseTier(v: string): TierId {
 }
 
 program
-  .name('lola')
+  .name('t101')
   .description('英雄联盟国服 BP 助手（数据源：101.qq.com 官方 + OP.GG 参考）')
-  .version('0.1.0');
+  .version('0.2.0');
 
 program
   .command('pick')
@@ -191,7 +191,7 @@ program
     const conn = findLcuConnection();
     if (!conn) {
       println('❌ 未检测到英雄联盟客户端。请先启动游戏客户端（登录到主界面即可）。');
-      println('   提示：国服客户端也可用；如检测不到可设置环境变量 LOLA_LOCKFILE 指向 lockfile 路径');
+      println('   提示：国服客户端也可用；如检测不到可设置环境变量 T101_LOCKFILE 指向 lockfile 路径');
       process.exitCode = 1;
       return;
     }
@@ -199,8 +199,8 @@ program
     try {
       const phase = await getGameflowPhase();
       println(`当前阶段: ${phase}`);
-      if (phase === 'ChampSelect') println('  → 可以用 lola champselect 查看 BP 推荐');
-      if (phase === 'GameStart' || phase === 'InProgress') println('  → 可以用 lola loading 查看 10 人信息');
+      if (phase === 'ChampSelect') println('  → 可以用 t101 champselect 查看 BP 推荐');
+      if (phase === 'GameStart' || phase === 'InProgress') println('  → 可以用 t101 loading 查看 10 人信息');
     } catch (e) {
       println(`❌ ${(e as Error).message}`);
     }
@@ -274,7 +274,7 @@ program
         const msg = (e as Error).message;
         if (msg.includes('不存在')) {
           println('❌ 当前不在选人阶段。请先进入对局选人界面（训练模式/匹配/排位均可）。');
-          println('   提示：选人阶段用 lola champselect，加载画面用 lola loading');
+          println('   提示：选人阶段用 t101 champselect，加载画面用 t101 loading');
         } else {
           println(`❌ ${msg}`);
         }
@@ -340,7 +340,7 @@ program
       const msg = (e as Error).message;
       if (msg.includes('不存在')) {
         println('❌ 当前不在对局中。请确认：客户端已进入加载画面（读取中界面）后再运行本命令。');
-        println('   提示：选人阶段用 lola champselect，加载画面用 lola loading');
+        println('   提示：选人阶段用 t101 champselect，加载画面用 t101 loading');
       } else {
         println(`❌ ${msg}`);
       }
@@ -348,13 +348,13 @@ program
     }
   });
 
-/** 检测端口上是否已有 lola Web 实例在运行（避免重复启动/重复开标签页） */
+/** 检测端口上是否已有 t101 Web 实例在运行（避免重复启动/重复开标签页） */
 function isLolaWebRunning(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const req = http.get({ host: '127.0.0.1', port, path: '/', timeout: 800 }, (res) => {
       let data = '';
       res.on('data', (c) => { data += c; if (data.length > 4000) res.destroy(); });
-      res.on('end', () => resolve(data.includes('LOLA')));
+      res.on('end', () => resolve(data.includes('T101')));
       res.on('error', () => resolve(false));
     });
     req.on('error', () => resolve(false));
@@ -370,9 +370,9 @@ program
   .action(async (opts) => {
     const port = Number(opts.port);
     const url = `http://127.0.0.1:${port}`;
-    // 已有 lola 实例在运行：直接提示，不重复启动、不重复开标签页
+    // 已有 t101 实例在运行：直接提示，不重复启动、不重复开标签页
     if (await isLolaWebRunning(port)) {
-      println(`ℹ️ LOLA Web 已在运行: ${url}`);
+      println(`ℹ️ T101 Web 已在运行: ${url}`);
       println('   直接打开浏览器访问即可，或 Ctrl+C 退出本命令');
       return;
     }
@@ -380,7 +380,7 @@ program
     const isWatch = process.env.npm_lifecycle_event === 'web:watch';
     // startWebServer 内部绑定 127.0.0.1（仅本机可访问）并在就绪时回调
     startWebServer(port, (url2) => {
-      println(`🌐 LOLA Web 界面已启动: ${url2}`);
+      println(`🌐 T101 Web 界面已启动: ${url2}`);
       println('   Ctrl+C 停止服务');
       if (opts.open && !isWatch) {
         try { execSync(`start ${url2}`, { stdio: 'ignore', windowsHide: true }); } catch { /* ignore */ }

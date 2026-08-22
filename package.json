@@ -1,13 +1,13 @@
 {
-  "name": "lol-assistant",
-  "version": "0.1.0",
-  "description": "英雄联盟国服 BP 助手：101.qq.com 官方数据 + OP.GG 参考",
+  "name": "101-tools",
+  "version": "0.2.0",
+  "description": "对局数据与 BP 分析终端工具（数据源：101.qq.com 官方）",
   "type": "module",
   "bin": {
-    "lola": "./bin/lola.mjs"
+    "t101": "./bin/t101.mjs"
   },
   "scripts": {
-    "lola": "tsx src/cli.ts",
+    "t101": "tsx src/cli.ts",
     "web": "tsx src/cli.ts web",
     "web:watch": "tsx watch src/cli.ts web",
     "test": "node --import tsx --test tests/*.test.ts"

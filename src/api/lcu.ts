@@ -53,7 +53,7 @@ function parseLockfile(content: string): LcuConnection {
 
 /** 查找 LCU 连接信息；客户端未运行返回 null */
 export function findLcuConnection(): LcuConnection | null {
-  const env = process.env.LOLA_LOCKFILE;
+  const env = process.env.T101_LOCKFILE;
   if (env && existsSync(env)) {
     try { return parseLockfile(readFileSync(env, 'utf-8')); } catch { /* fallthrough */ }
   }

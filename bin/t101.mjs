@@ -1,5 +1,5 @@
-#!/usr/bin/env node
-// lola 命令包装：通过 tsx 运行 TypeScript CLI（转发 stdio 和退出码）
+﻿#!/usr/bin/env node
+// t101 命令包装：通过 tsx 运行 TypeScript CLI（透传 stdio 和退出码）
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
