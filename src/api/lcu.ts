@@ -235,22 +235,42 @@ export interface PlayerRecentStats {
 
 /**
  * 查询召唤师近期战绩（最近 10 场）：用于队伍房间队友状态评估。
+ * 支持 summonerId（自动补名字/头像）或 puuid（好友场景，名字/头像从战绩数据补）。
  * match-history 端点不可用（腾讯阉割/权限）时返回 null。
  */
-export async function getPlayerRecentStats(summonerId: number): Promise<PlayerRecentStats | null> {
+export async function getPlayerRecentStats(summonerId: number, nameHint?: string): Promise<PlayerRecentStats | null> {
   try {
     const s = await getSummoner(summonerId);
+    const parsed = await fetchMatchHistory(s.puuid, summonerId, nameHint ?? summonerDisplayName(s), s.profileIconId ?? null);
+    if (parsed) return parsed;
+    // summoner 端点可用但 matches 失败：尝试直接拿 puuid 后重查（容错）
+    return fetchMatchHistory(s.puuid, summonerId, nameHint ?? summonerDisplayName(s), s.profileIconId ?? null);
+  } catch {
+    return null;
+  }
+}
+
+/** 好友场景：pid（UUID@pvp.net）去后缀即 puuid，直接查战绩 */
+export async function getPlayerRecentStatsByPuuid(puuid: string, nameHint?: string): Promise<PlayerRecentStats | null> {
+  return fetchMatchHistory(puuid.replace(/@pvp\.net$/, ''), 0, nameHint ?? '', null);
+}
+
+async function fetchMatchHistory(puuid: string, summonerId: number, name: string, icon: number | null): Promise<PlayerRecentStats | null> {
+  try {
     const raw = await lcuGet<{
       games?: { games?: {
         gameId?: number; gameCreation?: number; queueId?: number; gameDuration?: number;
         participants?: { championId?: number; stats?: { win?: boolean; kills?: number; deaths?: number; assists?: number } }[];
-        participantIdentities?: { player?: { summonerId?: number } }[];
+        participantIdentities?: { player?: { summonerId?: number; puuid?: string; profileIcon?: number } }[];
       }[] };
-    }>(`/lol-match-history/v1/products/lol/${s.puuid}/matches?begIndex=0&endIndex=10`);
+    }>(`/lol-match-history/v1/products/lol/${puuid}/matches?begIndex=0&endIndex=10`);
     const games = raw?.games?.games ?? [];
     const recent: MatchStat[] = [];
+    let iconFromGames: number | null = icon;
     for (const g of games) {
-      const idx = (g.participantIdentities ?? []).findIndex((p) => p.player?.summonerId === summonerId);
+      const idx = (g.participantIdentities ?? []).findIndex((p) => p.player?.summonerId === summonerId || (!summonerId && p.player?.puuid === puuid));
+      const pi = g.participantIdentities?.[idx];
+      if (iconFromGames === null && pi?.player?.profileIcon) iconFromGames = pi.player.profileIcon;
       const p = idx >= 0 ? g.participants?.[idx] : undefined;
       const st = p?.stats;
       if (!g.queueId || !st) continue;
@@ -268,8 +288,8 @@ export async function getPlayerRecentStats(summonerId: number): Promise<PlayerRe
     if (!recent.length) return null;
     return {
       summonerId,
-      name: summonerDisplayName(s),
-      icon: s.profileIconId ?? null,
+      name: name || `召唤师${summonerId || puuid.slice(0, 6)}`,
+      icon: iconFromGames,
       totalGames: recent.length,
       wins: recent.filter((r) => r.win).length,
       kda: recent.reduce(

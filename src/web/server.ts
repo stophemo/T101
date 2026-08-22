@@ -8,19 +8,33 @@ import { recommendPick, inferLane } from '../services/pick.js';
 import { recommendBan } from '../services/ban.js';
 import { analyzeChampSelect } from '../services/champselect.js';
 import { recommendAugments, recommendHextechHeroes } from '../services/hextech.js';
-import { findLcuConnectionCached, getGameflowPhase, getGameflowSession, getRankedStats, getCurrentSummoner, lcuGet, queueToMode, getPlayerRecentStats, getSummoner, summonerDisplayName, type PlayerRecentStats } from '../api/lcu.js';
+import { findLcuConnectionCached, getGameflowPhase, getGameflowSession, getRankedStats, getCurrentSummoner, lcuGet, queueToMode, getPlayerRecentStats, getPlayerRecentStatsByPuuid, getSummoner, summonerDisplayName, type PlayerRecentStats } from '../api/lcu.js';
 import { heroDisplayName } from '../models.js';
 import { evaluateRecentStats, evaluateTeam } from '../services/player.js';
 
-/** 近期战绩缓存：房间 3s 轮询防抖（60s TTL） */
-const recentStatsCache = new Map<number, { data: PlayerRecentStats | null; ts: number }>();
+/** 近期战绩缓存：房间 3s 轮询防抖（60s TTL，key = summonerId 或 puuid） */
+const recentStatsCache = new Map<string, { data: PlayerRecentStats | null; ts: number }>();
 const RECENT_TTL_MS = 60_000;
-async function getCachedRecentStats(summonerId: number): Promise<PlayerRecentStats | null> {
-  const hit = recentStatsCache.get(summonerId);
+async function getCachedRecentStats(key: string | number): Promise<PlayerRecentStats | null> {
+  const k = String(key);
+  const hit = recentStatsCache.get(k);
   if (hit && Date.now() - hit.ts < RECENT_TTL_MS) return hit.data;
-  const data = await getPlayerRecentStats(summonerId);
-  recentStatsCache.set(summonerId, { data, ts: Date.now() });
+  const data = typeof key === 'number'
+    ? await getPlayerRecentStats(key)
+    : await getPlayerRecentStatsByPuuid(key);
+  recentStatsCache.set(k, { data, ts: Date.now() });
   return data;
+}
+
+/** 逐场明细 enrich：英雄名/别名/模式名（前端直接展示） */
+async function enrichRecent(recent: PlayerRecentStats['recent']) {
+  const heroes = await getHeroList();
+  return recent.map((r) => ({
+    ...r,
+    title: heroDisplayName(heroes.get(r.championId), r.championId),
+    alias: heroes.get(r.championId)?.alias ?? '',
+    modeLabel: queueToMode(r.queueId).label,
+  }));
 }
 
 /** 召唤师信息缓存（国服 lobby members 无昵称字段，需补查；60s TTL） */
@@ -160,22 +174,16 @@ async function handleApi(route: string, params: URLSearchParams, res: ServerResp
           };
         });
         // 近期战绩（60s 缓存：房间 3s 轮询，不能每轮都打 match-history）
-        const [stats, heroes] = await Promise.all([
+        const [stats, recentLists] = await Promise.all([
           Promise.all(members2.map((m) => getCachedRecentStats(m.summonerId))),
-          getHeroList(),
+          Promise.all(members2.map((m) => getCachedRecentStats(m.summonerId).then((s) => (s ? enrichRecent(s.recent) : [])))),
         ]);
         const enriched = members2.map((m, i) => {
           const s = stats[i];
           return {
             ...m,
             stats: s ? evaluateRecentStats(s, queueId) : null,
-            // 逐场明细：英雄名/模式/时间/时长（前端直接展示）
-            recent: s?.recent.map((r) => ({
-              ...r,
-              title: heroDisplayName(heroes.get(r.championId), r.championId),
-              alias: heroes.get(r.championId)?.alias ?? '',
-              modeLabel: queueToMode(r.queueId).label,
-            })) ?? [],
+            recent: recentLists[i],
           };
         });
         const team = evaluateTeam(enriched.map((m) => ({ name: m.name, isMe: m.isMe, stats: stats[enriched.indexOf(m)] })), queueId);
@@ -263,38 +271,41 @@ async function handleApi(route: string, params: URLSearchParams, res: ServerResp
       return;
     }
     case 'friends': {
-      // 在线好友：近期战绩 + 组队建议（lol-chat 只读；战绩走 match-history + 60s 缓存）
+      // 在线好友：近期战绩 + 组队建议 + 逐场明细（lol-chat 只读；pid 去 @pvp.net 即 puuid 查 match-history）
       try {
         const friends = await lcuGet<{
           pid?: string | number; name?: string; gameName?: string; availability?: string;
-          lol?: { level?: number; rankedLeagueTier?: string; rankedLeagueDivision?: string };
+          lol?: { level?: number | string; rankedLeagueTier?: string; rankedLeagueDivision?: string };
         }[]>('/lol-chat/v1/friends');
         const me = await getCurrentSummoner().catch(() => null);
         const online = (friends ?? []).filter(
           (f) => f.availability && f.availability !== 'offline' && String(f.pid) !== String(me?.summonerId ?? -1),
         );
-        const results = await Promise.allSettled(online.map(async (f) => {
-          const summonerId = Number(f.pid);
-          if (!Number.isInteger(summonerId) || summonerId <= 0) return null;
-          const stats = await getCachedRecentStats(summonerId);
+        const settled = await Promise.allSettled(online.map(async (f) => {
+          const puuid = String(f.pid ?? '').replace(/@pvp\.net$/, '');
+          if (!/^[0-9a-f-]{20,}$/i.test(puuid)) return null;
+          const stats = await getCachedRecentStats(puuid);
           const v = stats ? evaluateRecentStats(stats) : null;
           return {
-            summonerId,
-            name: f.gameName || f.name || `好友${summonerId}`,
+            puuid,
+            name: f.gameName || f.name || `好友${puuid.slice(0, 6)}`,
             status: f.availability ?? 'unknown',
-            level: f.lol?.level ?? null,
+            level: f.lol?.level != null ? Number(f.lol.level) || null : null,
             tier: f.lol?.rankedLeagueTier ? `${f.lol.rankedLeagueTier} ${f.lol.rankedLeagueDivision ?? ''}`.trim() : '',
             icon: stats?.icon ?? null,
             stats: v,
+            recent: stats ? await enrichRecent(stats.recent) : [],
           };
         }));
-        const list = results
-          .filter((r): r is PromiseFulfilledResult<{
-            summonerId: number; name: string; status: string; level: number | null;
-            tier: string; icon: number | null; stats: ReturnType<typeof evaluateRecentStats> | null;
-          } | null> => r.status === 'fulfilled')
+        type FriendEntry = {
+          puuid: string; name: string; status: string; level: number | null; tier: string;
+          icon: number | null; stats: ReturnType<typeof evaluateRecentStats> | null;
+          recent: Awaited<ReturnType<typeof enrichRecent>>;
+        };
+        const list = settled
+          .filter((r): r is PromiseFulfilledResult<FriendEntry | null> => r.status === 'fulfilled')
           .map((r) => r.value)
-          .filter((x): x is NonNullable<typeof x> => x !== null)
+          .filter((x): x is FriendEntry => x !== null)
           .sort((a, b) => (b.stats?.score ?? -1) - (a.stats?.score ?? -1));
         ok(res, { count: list.length, friends: list });
       } catch (e) {

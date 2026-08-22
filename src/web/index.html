@@ -232,8 +232,8 @@
     <div class="card hidden" id="stLobby">
       <h3>👥 队伍房间 <span class="hint" id="stLobbyHint"></span></h3>
       <div class="board" id="stLobbyBoard"></div>
-      <div class="card" style="margin:14px 0 0;border-color:rgba(11,198,227,.2)" id="stRecent"></div>
       <div class="card" style="margin:14px 0 0;border-color:rgba(11,198,227,.2)" id="stTeamEval"></div>
+      <div class="card" style="margin:14px 0 0;border-color:rgba(11,198,227,.2)" id="stRecent"></div>
     </div>
 
     <!-- ③ 禁用阶段（排位）：10 人同时 ban，蓝 5 + 红 5 -->
@@ -311,6 +311,7 @@
           <span class="sub" id="frInfo"></span>
         </div>
         <div class="grid" id="frList"></div>
+        <div class="card" style="margin:14px 0 0;border-color:rgba(11,198,227,.2)" id="stFrRecent"></div>
       </div>
     </div>
   </section>
@@ -645,33 +646,13 @@ function lobbyCard(m, sel) {
 let lobbyData = null;
 let selMemberId = null;
 
-/** 逐场战绩行 */
-function recentRow(r) {
-  const t = new Date(r.gameCreation).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-  const dur = r.duration > 0 ? `${Math.floor(r.duration / 60)}分` : '';
-  return `<div class="recent-row ${r.win ? 'win' : 'lose'}">
-    <span class="rt">${t}</span>
-    <span class="rm">${esc(r.modeLabel || '')}</span>
-    <img class="ri" src="${heroImg(r.alias)}" onerror="this.style.visibility='hidden'">
-    <span class="rh">${esc(r.title)}</span>
-    <span class="rk">${r.kills}/${r.deaths}/${r.assists}</span>
-    <span class="rd">${dur}</span>
-    <span class="rr">${r.win ? '✓ 胜' : '✗ 负'}</span>
-  </div>`;
-}
-
 /** 明细面板：选中成员的最近 10 场逐场 */
 function renderRecent() {
   const list = (lobbyData?.members ?? []);
   const m = list.find((x) => x.summonerId === selMemberId) ?? list.find((x) => x.isMe);
   if (!m) { $('stRecent').innerHTML = ''; return; }
   selMemberId = m.summonerId;
-  const rows = m.recent || [];
-  const v = m.stats;
-  $('stRecent').innerHTML = `<h3>📋 ${esc(m.name)}${m.isMe ? ' (我)' : ''} 近期战绩 <span class="hint">${v ? `${v.verdict} ${v.winRate}% · KDA ${v.kda}` : ''} · 点击队友卡片切换</span></h3>`
-    + (rows.length
-      ? `<div class="recent-list">${rows.map(recentRow).join('')}</div>`
-      : '<div class="msg">暂无战绩数据</div>');
+  $('stRecent').innerHTML = recentPanelHTML(`${m.name}${m.isMe ? ' (我)' : ''}`, m.stats, m.recent || []);
 }
 
 function selectMember(id) {
@@ -973,14 +954,36 @@ async function loadLoading(force = false) {
   }
 }
 
-/* ---------- 在线好友状态（近期战绩 + 组队建议） ---------- */
+/* ---------- 在线好友状态（近期战绩 + 组队建议 + 逐场明细） ---------- */
 let frTimer = null;
+let friendsData = null;
+let selFriendId = null;
 const FR_STATUS = { chat: '🟢 在线', away: '🟡 离开', mobile: '📱 移动端', dnd: '🔴 勿扰', unknown: '⚪ 未知' };
-function frCard(f) {
+/** 逐场战绩行（房间/好友共用） */
+function recentRow(r) {
+  const t = new Date(r.gameCreation).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const dur = r.duration > 0 ? `${Math.floor(r.duration / 60)}分` : '';
+  return `<div class="recent-row ${r.win ? 'win' : 'lose'}">
+    <span class="rt">${t}</span>
+    <span class="rm">${esc(r.modeLabel || '')}</span>
+    <img class="ri" src="${heroImg(r.alias)}" onerror="this.style.visibility='hidden'">
+    <span class="rh">${esc(r.title)}</span>
+    <span class="rk">${r.kills}/${r.deaths}/${r.assists}</span>
+    <span class="rd">${dur}</span>
+    <span class="rr">${r.win ? '✓ 胜' : '✗ 负'}</span>
+  </div>`;
+}
+function recentPanelHTML(name, stats, recent) {
+  return `<h3>📋 ${esc(name)} 近期战绩 <span class="hint">${stats ? `${stats.verdict} ${stats.winRate}% · KDA ${stats.kda}` : ''} · 点击卡片切换</span></h3>`
+    + (recent.length
+      ? `<div class="recent-list">${recent.map(recentRow).join('')}</div>`
+      : '<div class="msg">暂无战绩数据</div>');
+}
+function frCard(f, sel) {
   const v = f.stats;
   const border = v ? (v.score >= 60 ? 'good' : v.score >= 50 ? 'mid' : 'bad') : 'mid';
   const rec = v ? (v.score >= 60 ? '🟢 适合组队' : v.score >= 50 ? '🟡 看情况' : '🔴 谨慎组队') : '—';
-  return `<div class="fr-card ${border}">
+  return `<div class="fr-card ${border} ${sel ? 'sel' : ''}" style="cursor:pointer" onclick="selectFriend('${esc(f.puuid)}')" title="点击查看近期战绩明细">
     <img class="avatar" src="${f.icon ? `https://game.gtimg.cn/images/lol/act/img/profileicon/${f.icon}.png` : ''}" onerror="this.style.visibility='hidden'">
     <div class="nm">${esc(f.name)}</div>
     <div class="st fr-status-${f.status}">${FR_STATUS[f.status] || '⚪'}</div>
@@ -992,16 +995,30 @@ function frCard(f) {
       : '<div class="meta">近期战绩不可用</div>'}
   </div>`;
 }
+function selectFriend(puuid) {
+  selFriendId = puuid;
+  if (!friendsData) return;
+  $('frList').innerHTML = friendsData.friends.map((f) => frCard(f, f.puuid === puuid)).join('');
+  renderFriendRecent();
+}
+function renderFriendRecent() {
+  const f = (friendsData?.friends ?? []).find((x) => x.puuid === selFriendId);
+  $('stFrRecent').innerHTML = f ? recentPanelHTML(f.name, f.stats, f.recent || []) : '';
+}
 async function loadFriends(force = false) {
   if (!force && !$('autoRefresh').checked) return;
   try {
     const d = await api('friends');
+    friendsData = d;
     $('frMsg').classList.add('hidden');
     $('frBody').classList.remove('hidden');
     $('frInfo').textContent = `${d.count} 位在线好友 · 按状态分排序`;
+    if (d.friends.length && !selFriendId) selFriendId = d.friends[0].puuid;
+    if (d.friends.length && !d.friends.some((f) => f.puuid === selFriendId)) selFriendId = d.friends[0].puuid;
     $('frList').innerHTML = d.friends.length
-      ? d.friends.map(frCard).join('')
+      ? d.friends.map((f) => frCard(f, f.puuid === selFriendId)).join('')
       : '<div class="msg">当前没有在线好友</div>';
+    renderFriendRecent();
   } catch (e) {
     $('frMsg').textContent = '❌ ' + e.message;
     $('frMsg').classList.remove('hidden');
