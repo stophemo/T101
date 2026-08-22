@@ -14,38 +14,48 @@ import { evaluateRecentStats, evaluateTeam } from '../services/player.js';
 
 /**
  * 近期战绩懒加载缓存：
- * - key = `{summonerId|puuid}:{queueId|''}`（切模式自动重查）
+ * - key = `{summonerId|puuid}:{模式族|''}:{limit}`
  * - 5 分钟 TTL + in-flight 合并（并发同 key 只发一次）
  * - 增量更新：TTL 过期后先查最近 1 场 gameId，无新战绩则续期复用，有新战绩才全量重查
+ * - LRU 上限 50 条，防止长期运行内存膨胀
  */
 const recentStatsCache = new Map<string, { data: PlayerRecentStats | null; ts: number; lastGameId: number | null }>();
 const recentInFlight = new Map<string, Promise<PlayerRecentStats | null>>();
 const RECENT_TTL_MS = 5 * 60_000;
+const RECENT_CACHE_MAX = 50;
 
-async function loadRecent(key: string | number, queueId?: number): Promise<PlayerRecentStats | null> {
+function cacheSet(k: string, v: { data: PlayerRecentStats | null; ts: number; lastGameId: number | null }) {
+  recentStatsCache.set(k, v);
+  if (recentStatsCache.size > RECENT_CACHE_MAX) {
+    const oldest = recentStatsCache.keys().next().value;
+    if (oldest !== undefined) recentStatsCache.delete(oldest);
+  }
+}
+
+async function loadRecent(key: string | number, limit = 21): Promise<PlayerRecentStats | null> {
   if (typeof key === 'number') {
-    return getPlayerRecentStats(key, { queueId });
+    return getPlayerRecentStats(key, { limit });
   }
   // puuid 场景：增量检查——先看最新 gameId 是否变化
   const puuid = key.replace(/@pvp\.net$/, '');
   const latest = await getLatestMatchGameId(puuid).catch(() => null);
-  const entry = recentStatsCache.get(`${key}:${queueId ?? ''}`);
+  const entry = recentStatsCache.get(`${key}:${limit}`);
   if (entry && entry.lastGameId !== null && latest !== null && latest === entry.lastGameId) {
     entry.ts = Date.now(); // 无新战绩：续期复用
     return entry.data;
   }
-  const data = await getPlayerRecentStatsByPuuid(puuid, { queueId });
-  return data;
+  return getPlayerRecentStatsByPuuid(puuid, { limit });
 }
 
-function getCachedRecentStats(key: string | number, queueId?: number): Promise<PlayerRecentStats | null> {
-  const k = `${key}:${queueId ? queueFamily(queueId) : ''}`;
+/** 全量 21 场缓存查询（queueId 不参与拉取/缓存，仅由调用方用于本模式参考统计） */
+function getCachedRecentStats(key: string | number, limit = 21): Promise<PlayerRecentStats | null> {
+  const k = `${key}:${limit}`;
   const hit = recentStatsCache.get(k);
   if (hit && Date.now() - hit.ts < RECENT_TTL_MS) return Promise.resolve(hit.data);
   const inflight = recentInFlight.get(k);
   if (inflight) return inflight;
-  const p = loadRecent(key, queueId).then((data) => {
-    recentStatsCache.set(k, { data, ts: Date.now(), lastGameId: data?.recent[0]?.gameId ?? null });
+  const p = loadRecent(key, limit).then((data) => {
+    cacheSet(k, { data, ts: Date.now(), lastGameId: data?.recent[0]?.gameId ?? null });
     recentInFlight.delete(k);
     return data;
   }).catch((e) => {
@@ -204,7 +214,7 @@ async function handleApi(route: string, params: URLSearchParams, res: ServerResp
           };
         });
         // 近期战绩摘要（懒加载缓存：5 分钟 TTL + in-flight 合并，按当前模式过滤）
-        const stats = await Promise.all(members2.map((m) => getCachedRecentStats(m.summonerId, queueId)));
+        const stats = await Promise.all(members2.map((m) => getCachedRecentStats(m.summonerId, 21)));
         const enriched = members2.map((m, i) => {
           const s = stats[i];
           return {
@@ -297,13 +307,15 @@ async function handleApi(route: string, params: URLSearchParams, res: ServerResp
       return;
     }
     case 'player-recent': {
-      // 懒加载：点选某玩家时才查逐场明细（缓存 5 分钟，按模式过滤）
+      // 懒加载：点选某玩家时才查逐场明细（缓存 5 分钟）；
+      // 房间（summonerId+queueId）按模式族 10 场，好友（puuid）全量 21 场不分类
       const summonerId = Number(p('summonerId'));
       const puuid = p('puuid') ?? '';
       const queueId = Number(p('queueId')) || undefined;
       const key = Number.isInteger(summonerId) && summonerId > 0 ? summonerId : puuid;
       if (!key) { fail(res, '缺少 summonerId/puuid'); return; }
-      const s = await getCachedRecentStats(key, queueId);
+      const isFriend = typeof key === 'string';
+      const s = await getCachedRecentStats(key, 21);
       if (!s) { ok(res, { stats: null, recent: [] }); return; }
       ok(res, {
         stats: evaluateRecentStats(s, queueId),
@@ -325,7 +337,8 @@ async function handleApi(route: string, params: URLSearchParams, res: ServerResp
         const settled = await Promise.allSettled(online.map(async (f) => {
           const puuid = String(f.pid ?? '').replace(/@pvp\.net$/, '');
           if (!/^[0-9a-f-]{20,}$/i.test(puuid)) return null;
-          const stats = await getCachedRecentStats(puuid);
+          // 好友：全量 21 场，不区分模式
+          const stats = await getCachedRecentStats(puuid, 21);
           const v = stats ? evaluateRecentStats(stats) : null;
           return {
             puuid,

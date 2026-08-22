@@ -645,6 +645,7 @@ function lobbyCard(m, sel) {
 
 let lobbyData = null;
 let selMemberId = null;
+let lastLobbyFp = '';
 /** 已加载过明细的 key（summonerId:queueId），避免轮询重复查 */
 const recentLoadedFor = new Set();
 
@@ -673,6 +674,13 @@ function selectMember(id) {
 
 async function renderLobby() {
   const d = await api('lobby');
+  // 性能：关键数据无变化时跳过 DOM 重建（房间 3s 轮询，避免每轮全量渲染）
+  const fp = JSON.stringify([
+    d.queueId, d.modeLabel, d.members.length,
+    ...d.members.map((m) => [m.summonerId, m.name, m.level, m.stats?.score, m.stats?.winRate, m.stats?.kda, m.stats?.modeGames]),
+  ]);
+  if (fp === lastLobbyFp && lobbyData) return;
+  lastLobbyFp = fp;
   lobbyData = d;
   showStage('lobby');
   setFlow(d.mode === 'hextech_aram' ? 'hex' : 'normal', 'room');
@@ -972,6 +980,7 @@ async function loadLoading(force = false) {
 let frTimer = null;
 let friendsData = null;
 let selFriendId = null;
+let lastFriendsFp = '';
 const FR_STATUS = { chat: '🟢 在线', away: '🟡 离开', mobile: '📱 移动端', dnd: '🔴 勿扰', unknown: '⚪ 未知' };
 /** 逐场战绩行（房间/好友共用） */
 function recentRow(r) {
@@ -1003,7 +1012,7 @@ function frCard(f, sel) {
     <div class="st fr-status-${f.status}">${FR_STATUS[f.status] || '⚪'}</div>
     <div class="meta">${[f.tier, f.level ? `Lv.${f.level}` : ''].filter(Boolean).join(' · ') || '段位未知'}</div>
     ${v
-      ? `<div class="meta">近10场 ${v.winRate.toFixed(0)}% · KDA ${v.kda}</div>
+      ? `<div class="meta">近21场 ${v.winRate.toFixed(0)}% · KDA ${v.kda}</div>
          <div class="rec" style="color:${v.score >= 60 ? 'var(--green)' : v.score >= 50 ? 'var(--gold)' : 'var(--red)'}">${v.verdict}（${v.score}分）</div>
          <div class="rec">${rec}</div>`
       : '<div class="meta">近期无战绩数据</div>'}
@@ -1031,6 +1040,10 @@ async function loadFriends(force = false) {
   if (!force && !$('autoRefresh').checked) return;
   try {
     const d = await api('friends');
+    // 性能：无变化跳过重渲染（30s 轮询）
+    const fp = JSON.stringify([d.count, ...d.friends.map((f) => [f.puuid, f.status, f.stats?.score, f.stats?.winRate])]);
+    if (fp === lastFriendsFp && friendsData) return;
+    lastFriendsFp = fp;
     friendsData = d;
     $('frMsg').classList.add('hidden');
     $('frBody').classList.remove('hidden');
