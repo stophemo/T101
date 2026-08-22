@@ -63,6 +63,7 @@
   .slot { background: var(--card2); border: 1px solid var(--border); border-radius: 10px; padding: 10px; text-align: center; position: relative; transition: border-color .12s, box-shadow .12s; }
   .slot.acting { border-color: var(--gold); box-shadow: 0 0 12px rgba(251,191,36,.35); }
   .slot.me { border-color: rgba(11,198,227,.55); }
+  .slot.sel { border-color: var(--gold); box-shadow: 0 0 12px rgba(251,191,36,.45); }
   .slot img { width: 40px; height: 40px; border-radius: 10px; }
   .slot .nm { font-size: 12px; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .slot .ln { font-size: 11px; color: var(--muted); margin-top: 2px; }
@@ -92,6 +93,20 @@
   .ban-slot img { width: 46px; height: 46px; border-radius: 10px; }
   .ban-slot .nm { font-size: 11px; color: var(--text); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ban-slot .order { position: absolute; top: 4px; left: 6px; font-size: 10px; color: var(--dim); }
+
+  /* 逐场战绩明细 */
+  .recent-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+  .recent-row { display: grid; grid-template-columns: 74px 76px 34px 1fr 72px 52px 44px; gap: 8px; align-items: center; padding: 5px 10px; border-radius: 8px; background: rgba(255,255,255,.02); border-left: 3px solid var(--dim); font-size: 12px; }
+  .recent-row.win { border-left-color: var(--green); }
+  .recent-row.lose { border-left-color: var(--red); }
+  .recent-row .ri { width: 26px; height: 26px; border-radius: 6px; }
+  .recent-row .rt { color: var(--dim); font-variant-numeric: tabular-nums; }
+  .recent-row .rm { color: var(--dim); font-size: 11px; }
+  .recent-row .rk { font-variant-numeric: tabular-nums; text-align: right; }
+  .recent-row .rd { color: var(--dim); text-align: right; }
+  .recent-row .rr { font-weight: 700; text-align: right; }
+  .recent-row.win .rr { color: var(--green); }
+  .recent-row.lose .rr { color: var(--red); }
 
   /* 好友卡片 */
   .fr-card { background: var(--card2); border: 1px solid var(--border); border-radius: 12px; padding: 14px; text-align: center; position: relative; }
@@ -217,6 +232,7 @@
     <div class="card hidden" id="stLobby">
       <h3>👥 队伍房间 <span class="hint" id="stLobbyHint"></span></h3>
       <div class="board" id="stLobbyBoard"></div>
+      <div class="card" style="margin:14px 0 0;border-color:rgba(11,198,227,.2)" id="stRecent"></div>
       <div class="card" style="margin:14px 0 0;border-color:rgba(11,198,227,.2)" id="stTeamEval"></div>
     </div>
 
@@ -612,11 +628,11 @@ async function renderIdle() {
   $('stTurn').textContent = '';
 }
 
-/** 房间队友卡片（含近期状态） */
-function lobbyCard(m) {
+/** 房间队友卡片（含近期状态，点击选中看逐场明细） */
+function lobbyCard(m, sel) {
   const v = m.stats;
   const color = v ? (v.score >= 60 ? 'var(--green)' : v.score >= 45 ? 'var(--gold)' : 'var(--red)') : 'var(--dim)';
-  return `<div class="slot ${m.isMe ? 'me' : ''}">
+  return `<div class="slot ${m.isMe ? 'me' : ''} ${sel ? 'sel' : ''}" style="cursor:pointer" onclick="selectMember(${m.summonerId})" title="点击查看近期战绩明细">
     <img src="${m.icon ? `https://game.gtimg.cn/images/lol/act/img/profileicon/${m.icon}.png` : ''}" onerror="this.style.visibility='hidden'">
     <div class="nm">${esc(m.name)}${m.isMe ? ' (我)' : ''}</div>
     <div class="ln">Lv.${m.level ?? '-'}</div>
@@ -626,16 +642,59 @@ function lobbyCard(m) {
   </div>`;
 }
 
+let lobbyData = null;
+let selMemberId = null;
+
+/** 逐场战绩行 */
+function recentRow(r) {
+  const t = new Date(r.gameCreation).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const dur = r.duration > 0 ? `${Math.floor(r.duration / 60)}分` : '';
+  return `<div class="recent-row ${r.win ? 'win' : 'lose'}">
+    <span class="rt">${t}</span>
+    <span class="rm">${esc(r.modeLabel || '')}</span>
+    <img class="ri" src="${heroImg(r.alias)}" onerror="this.style.visibility='hidden'">
+    <span class="rh">${esc(r.title)}</span>
+    <span class="rk">${r.kills}/${r.deaths}/${r.assists}</span>
+    <span class="rd">${dur}</span>
+    <span class="rr">${r.win ? '✓ 胜' : '✗ 负'}</span>
+  </div>`;
+}
+
+/** 明细面板：选中成员的最近 10 场逐场 */
+function renderRecent() {
+  const list = (lobbyData?.members ?? []);
+  const m = list.find((x) => x.summonerId === selMemberId) ?? list.find((x) => x.isMe);
+  if (!m) { $('stRecent').innerHTML = ''; return; }
+  selMemberId = m.summonerId;
+  const rows = m.recent || [];
+  const v = m.stats;
+  $('stRecent').innerHTML = `<h3>📋 ${esc(m.name)}${m.isMe ? ' (我)' : ''} 近期战绩 <span class="hint">${v ? `${v.verdict} ${v.winRate}% · KDA ${v.kda}` : ''} · 点击队友卡片切换</span></h3>`
+    + (rows.length
+      ? `<div class="recent-list">${rows.map(recentRow).join('')}</div>`
+      : '<div class="msg">暂无战绩数据</div>');
+}
+
+function selectMember(id) {
+  selMemberId = id;
+  if (!lobbyData) return;
+  $('stLobbyBoard').innerHTML = lobbyData.members.map((m) => lobbyCard(m, m.summonerId === id)).join('');
+  renderRecent();
+}
+
 async function renderLobby() {
   const d = await api('lobby');
+  lobbyData = d;
   showStage('lobby');
   setFlow(d.mode === 'hextech_aram' ? 'hex' : 'normal', 'room');
   $('stPhase').textContent = '👥 队伍房间';
   $('stMode').textContent = `模式: ${d.modeLabel}`;
   $('stTimer').textContent = '';
-  $('stTurn').textContent = `${d.members.length}/5 人已就位`;
-  $('stLobbyHint').textContent = `${d.modeLabel} · 接受对局后队友已进入房间 · 近期战绩 10 场评估`;
-  $('stLobbyBoard').innerHTML = d.members.map(lobbyCard).join('');
+  $('stTurn').textContent = `${d.members.length}/5 人已就位 · 点击卡片看近期战绩`;
+  $('stLobbyHint').textContent = `${d.modeLabel} · 接受对局后队友已进入房间 · 近期战绩评估`;
+  const sel = selMemberId ?? d.members.find((x) => x.isMe)?.summonerId ?? null;
+  selMemberId = sel;
+  $('stLobbyBoard').innerHTML = d.members.map((m) => lobbyCard(m, m.summonerId === sel)).join('');
+  renderRecent();
   const t = d.team;
   $('stTeamEval').innerHTML = t
     ? `<h3>🧭 队伍状态评估</h3>

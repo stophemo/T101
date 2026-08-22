@@ -218,6 +218,8 @@ export interface MatchStat {
   kills: number;
   deaths: number;
   assists: number;
+  /** 对局时长（秒） */
+  duration: number;
 }
 
 /** 召唤师近期战绩（最近最多 10 场，LCU match-history 只读） */
@@ -240,7 +242,7 @@ export async function getPlayerRecentStats(summonerId: number): Promise<PlayerRe
     const s = await getSummoner(summonerId);
     const raw = await lcuGet<{
       games?: { games?: {
-        gameId?: number; gameCreation?: number; queueId?: number;
+        gameId?: number; gameCreation?: number; queueId?: number; gameDuration?: number;
         participants?: { championId?: number; stats?: { win?: boolean; kills?: number; deaths?: number; assists?: number } }[];
         participantIdentities?: { player?: { summonerId?: number } }[];
       }[] };
@@ -260,6 +262,7 @@ export async function getPlayerRecentStats(summonerId: number): Promise<PlayerRe
         kills: st.kills ?? 0,
         deaths: st.deaths ?? 0,
         assists: st.assists ?? 0,
+        duration: g.gameDuration ?? 0,
       });
     }
     if (!recent.length) return null;

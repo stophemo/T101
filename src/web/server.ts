@@ -160,10 +160,23 @@ async function handleApi(route: string, params: URLSearchParams, res: ServerResp
           };
         });
         // 近期战绩（60s 缓存：房间 3s 轮询，不能每轮都打 match-history）
-        const stats = await Promise.all(members2.map((m) => getCachedRecentStats(m.summonerId)));
+        const [stats, heroes] = await Promise.all([
+          Promise.all(members2.map((m) => getCachedRecentStats(m.summonerId))),
+          getHeroList(),
+        ]);
         const enriched = members2.map((m, i) => {
           const s = stats[i];
-          return { ...m, stats: s ? evaluateRecentStats(s, queueId) : null };
+          return {
+            ...m,
+            stats: s ? evaluateRecentStats(s, queueId) : null,
+            // 逐场明细：英雄名/模式/时间/时长（前端直接展示）
+            recent: s?.recent.map((r) => ({
+              ...r,
+              title: heroDisplayName(heroes.get(r.championId), r.championId),
+              alias: heroes.get(r.championId)?.alias ?? '',
+              modeLabel: queueToMode(r.queueId).label,
+            })) ?? [],
+          };
         });
         const team = evaluateTeam(enriched.map((m) => ({ name: m.name, isMe: m.isMe, stats: stats[enriched.indexOf(m)] })), queueId);
         ok(res, { queueId, mode: queueToMode(queueId).mode, modeLabel: queueToMode(queueId).label, localSummonerId: lobby.localMember?.summonerId, members: enriched, team });
