@@ -7,13 +7,15 @@ export interface PlayerVerdict {
   score: number;
   /** 中文结论 */
   verdict: string;
-  /** 近 10 场总胜率 % */
+  /** 统计场次 */
+  totalGames: number;
+  /** 统计胜率 % */
   winRate: number;
-  /** 近 10 场中当前模式的胜率 %（样本不足为 null） */
+  /** 统计中当前模式的胜率 %（样本不足为 null） */
   modeWinRate: number | null;
-  /** 近 10 场 KDA */
+  /** 统计 KDA */
   kda: number;
-  /** 近 10 场中当前模式场次 */
+  /** 统计中当前模式场次 */
   modeGames: number;
 }
 
@@ -42,7 +44,7 @@ export function evaluateRecentStats(
   else if (score >= 55) verdict = '👍 状态不错';
   else if (score >= 45) verdict = '😐 状态一般';
   else verdict = '📉 状态低迷';
-  return { score, verdict, winRate: +winRate.toFixed(1), modeWinRate: modeWinRate !== null ? +modeWinRate.toFixed(1) : null, kda: +kda.toFixed(2), modeGames };
+  return { score, verdict, totalGames: stats.totalGames, winRate: +winRate.toFixed(1), modeWinRate: modeWinRate !== null ? +modeWinRate.toFixed(1) : null, kda: +kda.toFixed(2), modeGames };
 }
 
 /** 队伍整体评估（纯函数，供房间视图展示） */

@@ -1012,7 +1012,7 @@ function frCard(f, sel) {
     <div class="st fr-status-${f.status}">${FR_STATUS[f.status] || '⚪'}</div>
     <div class="meta">${[f.tier, f.level ? `Lv.${f.level}` : ''].filter(Boolean).join(' · ') || '段位未知'}</div>
     ${v
-      ? `<div class="meta">近21场 ${v.winRate.toFixed(0)}% · KDA ${v.kda}</div>
+      ? `<div class="meta">近${v.totalGames}场 ${v.winRate.toFixed(0)}% · KDA ${v.kda}</div>
          <div class="rec" style="color:${v.score >= 60 ? 'var(--green)' : v.score >= 50 ? 'var(--gold)' : 'var(--red)'}">${v.verdict}（${v.score}分）</div>
          <div class="rec">${rec}</div>`
       : '<div class="meta">近期无战绩数据</div>'}
