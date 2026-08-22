@@ -8,7 +8,7 @@ import { recommendPick, inferLane } from '../services/pick.js';
 import { recommendBan } from '../services/ban.js';
 import { analyzeChampSelect } from '../services/champselect.js';
 import { recommendAugments, recommendHextechHeroes } from '../services/hextech.js';
-import { findLcuConnectionCached, getGameflowPhase, getGameflowSession, getRankedStats, getCurrentSummoner, lcuGet, queueToMode, getPlayerRecentStats, getPlayerRecentStatsByPuuid, getLatestMatchGameId, getSummoner, summonerDisplayName, type PlayerRecentStats } from '../api/lcu.js';
+import { findLcuConnectionCached, getGameflowPhase, getGameflowSession, getRankedStats, getCurrentSummoner, lcuGet, queueToMode, queueFamily, getPlayerRecentStats, getPlayerRecentStatsByPuuid, getLatestMatchGameId, getSummoner, summonerDisplayName, type PlayerRecentStats } from '../api/lcu.js';
 import { heroDisplayName } from '../models.js';
 import { evaluateRecentStats, evaluateTeam } from '../services/player.js';
 
@@ -39,7 +39,7 @@ async function loadRecent(key: string | number, queueId?: number): Promise<Playe
 }
 
 function getCachedRecentStats(key: string | number, queueId?: number): Promise<PlayerRecentStats | null> {
-  const k = `${key}:${queueId ?? ''}`;
+  const k = `${key}:${queueId ? queueFamily(queueId) : ''}`;
   const hit = recentStatsCache.get(k);
   if (hit && Date.now() - hit.ts < RECENT_TTL_MS) return Promise.resolve(hit.data);
   const inflight = recentInFlight.get(k);

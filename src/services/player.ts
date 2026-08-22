@@ -1,5 +1,6 @@
 // 队伍房间：召唤师近期状态评估（胜率 + KDA + 对应模式表现 → 0-100 分 + 中文结论）
 import type { PlayerRecentStats } from '../api/lcu.js';
+import { queueFamily } from '../api/lcu.js';
 
 export interface PlayerVerdict {
   /** 0-100 状态分 */
@@ -24,11 +25,12 @@ export function evaluateRecentStats(
   const total = Math.max(1, stats.totalGames);
   const winRate = (stats.wins / total) * 100;
   const kda = (stats.kda.kills + stats.kda.assists) / Math.max(1, stats.kda.deaths);
-  // 对应模式（近 10 场中 queueId 相同的场次）
+  // 对应模式族（近 10 场中与当前 queueId 同族的场次，如 420/440 都算排位）
   let modeWinRate: number | null = null;
   let modeGames = 0;
   if (queueId) {
-    const ms = stats.recent.filter((r) => r.queueId === queueId);
+    const family = queueFamily(queueId);
+    const ms = stats.recent.filter((r) => queueFamily(r.queueId) === family);
     modeGames = ms.length;
     if (ms.length >= 2) modeWinRate = (ms.filter((r) => r.win).length / ms.length) * 100;
   }

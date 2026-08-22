@@ -639,7 +639,7 @@ function lobbyCard(m, sel) {
     <div class="ln">Lv.${m.level ?? '-'}</div>
     ${v
       ? `<div class="ln" style="color:${color};font-size:10px">${v.verdict} ${v.winRate}% · KDA ${v.kda}${v.modeGames >= 2 ? `<br>本模式 ${v.modeWinRate}%(${v.modeGames}场)` : ''}</div>`
-      : '<div class="ln" style="font-size:10px">近期战绩不可用</div>'}
+      : '<div class="ln" style="font-size:10px">最近 21 场无该模式战绩</div>'}
   </div>`;
 }
 

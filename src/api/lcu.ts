@@ -204,6 +204,17 @@ export interface ChampSelectSession {
 /** 队列 id -> 模式（queueId 常见值：420 单双排 / 440 灵活排位 / 430 匹配 / 400 盲选 / 450 普通大乱斗） */
 export const KNOWN_QUEUE_IDS = new Set([420, 440, 450, 430, 400, 490, 2400]);
 
+/** 队列模式族：同族合并统计/过滤（420+440 排位、2400+2410 海克斯等） */
+export function queueFamily(queueId: number | undefined): string {
+  switch (queueId) {
+    case 420: case 440: return 'ranked';
+    case 2400: case 2410: return 'hextech_aram';
+    case 450: return 'aram';
+    case 430: case 400: case 490: return 'normal';
+    default: return String(queueId ?? '');
+  }
+}
+
 /** 队列 id → 模式（2400 = 海克斯大乱斗，实战确认 gameMode=KIWI） */
 /** 未知 queueId：视为海克斯大乱斗（海克斯大乱斗无 ban 阶段、独立 queue；待实战确认具体 id） */
 /** 误判风险：若普通大乱斗/新模式改用了新 id 会被当成海克斯。CLI/Web 会显示 queueId 便于反馈 */
@@ -273,10 +284,13 @@ async function fetchMatchHistory(puuid: string, summonerId: number, name: string
         participants?: { championId?: number; stats?: { win?: boolean; kills?: number; deaths?: number; assists?: number } }[];
         participantIdentities?: { player?: { summonerId?: number; puuid?: string; profileIcon?: number } }[];
       }[] };
-      // 国服 LCU 不支持 queue 过滤参数（返回 400）：查 20 场后在本地按 queueId 过滤
-    }>(`/lol-match-history/v1/products/lol/${puuid}/matches?begIndex=0&endIndex=20`);
-    // 本地按模式过滤（LCU 不支持 queue 参数），最多 10 场
-    const games = (raw?.games?.games ?? []).filter((g) => !queueId || g.queueId === queueId).slice(0, 10);
+    // 国服 LCU match-history 限制：不支持 queue 参数（400）、不支持翻页（begIndex 无效）、
+    // 最多返回最近 21 场——本地按模式族过滤（420/440 排位、2400/2410 海克斯），最多取 10 场
+    }>(`/lol-match-history/v1/products/lol/${puuid}/matches?begIndex=0&endIndex=21`);
+    // 本地按模式族过滤（LCU 不支持 queue 参数）：同族（如 420/440 排位）合并统计，最多 10 场
+    const games = (raw?.games?.games ?? [])
+      .filter((g) => !queueId || queueFamily(g.queueId) === queueFamily(queueId))
+      .slice(0, 10);
     const recent: MatchStat[] = [];
     let iconFromGames: number | null = icon;
     for (const g of games) {
