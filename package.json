@@ -1,0 +1,23 @@
+{
+  "name": "lol-assistant",
+  "version": "0.1.0",
+  "description": "英雄联盟国服 BP 助手：101.qq.com 官方数据 + OP.GG 参考",
+  "type": "module",
+  "bin": {
+    "lola": "./bin/lola.mjs"
+  },
+  "scripts": {
+    "lola": "tsx src/cli.ts",
+    "web": "tsx src/cli.ts web",
+    "web:watch": "tsx watch src/cli.ts web",
+    "test": "node --import tsx --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

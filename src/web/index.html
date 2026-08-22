@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LOLA · 英雄联盟 BP 助手</title>
+<style>
+  :root {
+    --bg: #0b0f17; --bg2: #101826; --card: #121a26; --card2: #16202f;
+    --border: #1e2a3a; --text: #d8e0ea; --dim: #7d8ca3;
+    --gold: #c8aa6e; --cyan: #0bc6e3; --green: #4ade80; --red: #f87171; --orange: #fbbf24;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; min-height: 100vh; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 16px 20px 60px; }
+
+  /* header */
+  header { display: flex; align-items: center; gap: 14px; padding: 14px 0 10px; border-bottom: 1px solid var(--border); margin-bottom: 14px; flex-wrap: wrap; }
+  .logo { font-size: 22px; font-weight: 700; color: var(--gold); letter-spacing: 1px; }
+  .logo span { color: var(--cyan); }
+  .spacer { flex: 1; }
+  .status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--dim); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #555; }
+  .dot.on { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .dot.off { background: #555; }
+  .phase-badge { background: var(--card2); border: 1px solid var(--border); padding: 3px 10px; border-radius: 20px; font-size: 12px; color: var(--cyan); }
+  .switch { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); cursor: pointer; user-select: none; }
+  .switch input { accent-color: var(--cyan); }
+
+  /* tabs */
+  nav { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  nav button { background: var(--card); color: var(--dim); border: 1px solid var(--border); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; transition: all .15s; }
+  nav button:hover { color: var(--text); border-color: var(--cyan); }
+  nav button.active { background: linear-gradient(180deg, #173042, #12202f); color: var(--cyan); border-color: var(--cyan); font-weight: 600; }
+  section.tab { display: none; }
+  section.tab.active { display: block; animation: fade .2s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+
+  /* cards */
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  .card h3 { font-size: 15px; color: var(--gold); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .card h3 .hint { font-size: 12px; color: var(--dim); font-weight: 400; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  input[type=text], select {
+    background: var(--bg2); border: 1px solid var(--border); color: var(--text);
+    padding: 9px 12px; border-radius: 8px; font-size: 14px; outline: none;
+  }
+  input[type=text]:focus, select:focus { border-color: var(--cyan); }
+  input[type=text] { width: 280px; }
+  button.primary { background: linear-gradient(180deg, #1aa7c0, #0e7f96); color: #fff; border: none; padding: 9px 22px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; }
+  button.primary:hover { filter: brightness(1.1); }
+  button.primary:disabled { opacity: .5; cursor: wait; }
+
+  /* hero chips */
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { display: flex; align-items: center; gap: 7px; background: var(--card2); border: 1px solid var(--border); border-radius: 24px; padding: 4px 12px 4px 4px; font-size: 13px; }
+  .chip img { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--border); }
+  .chip.red { border-color: rgba(248,113,113,.4); }
+  .chip.blue { border-color: rgba(11,198,227,.4); }
+
+  /* recommendation cards */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .hero-card { background: var(--card2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: center; position: relative; transition: transform .12s, border-color .12s; }
+  .hero-card:hover { transform: translateY(-2px); border-color: var(--cyan); }
+  .hero-card img { width: 64px; height: 64px; border-radius: 12px; margin-bottom: 8px; }
+  .hero-card .name { font-size: 14px; font-weight: 600; }
+  .hero-card .lane { font-size: 11px; color: var(--dim); margin-top: 2px; }
+  .hero-card .win { font-size: 15px; font-weight: 700; margin-top: 4px; }
+  .hero-card .counters { font-size: 11px; color: var(--dim); margin-top: 5px; line-height: 1.5; }
+  .hero-card .rank { position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,.5); font-size: 11px; padding: 1px 7px; border-radius: 10px; color: var(--dim); }
+  .tier-badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 4px; margin-top: 5px; }
+  .t0 { background: rgba(248,113,113,.18); color: var(--red); }
+  .t1 { background: rgba(200,170,110,.18); color: var(--gold); }
+  .t2 { background: rgba(11,198,227,.15); color: var(--cyan); }
+  .t3 { background: rgba(125,140,163,.15); color: var(--dim); }
+  .t4 { background: rgba(125,140,163,.08); color: #56637a; }
+
+  .win-hi { color: var(--green); } .win-lo { color: var(--red); } .win-mid { color: var(--text); }
+
+  /* table */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--dim); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 12px; }
+  td { padding: 8px 10px; border-bottom: 1px solid rgba(30,42,58,.5); }
+  tr:hover td { background: rgba(11,198,227,.04); }
+  td.hero { display: flex; align-items: center; gap: 8px; }
+  td.hero img { width: 30px; height: 30px; border-radius: 6px; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .team-header { font-size: 14px; font-weight: 700; margin: 12px 0 6px; display: flex; align-items: center; gap: 8px; }
+  .team-header.blue { color: var(--cyan); } .team-header.red { color: var(--red); }
+
+  .msg { padding: 18px; text-align: center; color: var(--dim); font-size: 14px; border: 1px dashed var(--border); border-radius: 10px; }
+  .err { color: var(--red); font-size: 13px; margin-top: 8px; }
+  .sub { font-size: 12px; color: var(--dim); }
+  .hidden { display: none !important; }
+  .loading-spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--cyan); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .badge-ban { font-size: 11px; color: var(--red); border: 1px solid rgba(248,113,113,.35); padding: 1px 8px; border-radius: 10px; }
+  .aug-card { background: var(--card2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; position: relative; }
+  .aug-card .icon { width: 44px; height: 44px; border-radius: 10px; margin-bottom: 8px; object-fit: cover; }
+  .aug-card .name { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .aug-card .sub2 { font-size: 11px; color: var(--dim); margin-top: 4px; line-height: 1.5; }
+  .aug-card .heroes { font-size: 11px; color: var(--cyan); margin-top: 6px; }
+  .aug-card .win { font-size: 14px; font-weight: 700; margin-top: 4px; }
+  .lv-silver { color: #aeb9c8; } .lv-gold { color: var(--gold); } .lv-prismatic { color: #e879f9; }
+  .rank-tag { position: absolute; top: 8px; right: 8px; font-size: 11px; color: var(--dim); background: rgba(0,0,0,.4); padding: 1px 7px; border-radius: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">LOLA<span>⚔</span> BP 助手</div>
+    <div class="spacer"></div>
+    <div class="status" id="lcuStatus"><span class="dot" id="lcuDot"></span><span id="lcuText">检测客户端…</span></div>
+    <span class="phase-badge hidden" id="phaseBadge"></span>
+    <label class="switch"><input type="checkbox" id="autoRefresh" checked> 自动刷新</label>
+  </header>
+
+  <nav id="tabs">
+    <button data-tab="bp" class="active">🎯 BP 助手</button>
+    <button data-tab="hex">🃏 海克斯大乱斗</button>
+    <button data-tab="pick">⚔ Pick 推荐</button>
+    <button data-tab="ban">🛡 Ban 建议</button>
+    <button data-tab="rank">📊 榜单</button>
+    <button data-tab="hero">🔍 对位克制</button>
+    <button data-tab="loading">🎮 加载画面</button>
+  </nav>
+
+  <!-- ===== BP 助手（自动） ===== -->
+  <section class="tab active" id="tab-bp">
+    <div class="card">
+      <h3>选人阶段实时分析 <span class="hint">自动从本地客户端读取 · 需在选人界面</span></h3>
+      <div class="msg" id="bpMsg">正在检测选人状态…</div>
+      <div id="bpBody" class="hidden">
+        <div class="row" style="margin-bottom:10px">
+          <span class="sub">我方位置:</span><span id="bpMyLane" class="sub" style="color:var(--cyan)"></span>
+          <span class="sub" style="margin-left:12px">对面 Ban:</span><span id="bpEnemyBans" class="sub"></span>
+          <span class="sub" style="margin-left:12px">我方 Ban:</span><span id="bpMyBans" class="sub"></span>
+        </div>
+        <div class="row" style="margin-bottom:14px">
+          <span class="sub">👹 对面已选:</span>
+          <div class="chips" id="bpEnemyPicks"></div>
+        </div>
+        <div class="row" style="margin-bottom:14px">
+          <span class="sub">😊 我方已选:</span>
+          <div class="chips" id="bpMyPicks"></div>
+        </div>
+        <div class="card" style="margin:0;border-color:rgba(74,222,128,.25)">
+          <h3 style="color:var(--green)">🎯 推荐 Pick</h3>
+          <div class="grid" id="bpPicks"></div>
+        </div>
+        <div class="card" style="margin:14px 0 0;border-color:rgba(248,113,113,.25)">
+          <h3 style="color:var(--red)">🛡 推荐 Ban</h3>
+          <div class="grid" id="bpBans"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 海克斯大乱斗 ===== -->
+  <section class="tab" id="tab-hex">
+    <div class="card">
+      <h3>海克斯大乱斗 <span class="hint">英雄胜率 + 海克斯牌推荐 · 数据源 101.qq.com 官方</span></h3>
+      <div class="row" style="margin-bottom:14px">
+        <button class="primary" onclick="loadHex()" id="hexBtn">刷新</button>
+        <span class="sub">按胜率排序 · 每个英雄附推荐海克斯牌与搭档</span>
+      </div>
+      <div class="grid" id="hexHeroes"></div>
+    </div>
+    <div class="card">
+      <h3 style="color:var(--cyan)">🃏 海克斯牌推荐 <span class="hint">持有胜率最高的牌（选牌时优先考虑）</span></h3>
+      <div class="grid" id="hexAugments"></div>
+    </div>
+  </section>
+
+  <!-- ===== Pick 手动 ===== -->
+  <section class="tab" id="tab-pick">
+    <div class="card">
+      <h3>Pick 推荐 <span class="hint">根据对面已选英雄推荐克制选择</span></h3>
+      <div class="row">
+        <input type="text" id="pickEnemy" placeholder="对面英雄，逗号分隔：亚索,盲僧,锤石">
+        <select id="pickLane">
+          <option value="ALL">全位置</option><option value="TOP">上单</option><option value="JUNGLE">打野</option>
+          <option value="MIDDLE">中单</option><option value="BOTTOM">ADC</option><option value="SUPPORT">辅助</option>
+        </select>
+        <select id="pickTier">
+          <option value="255">全段位</option><option value="10">最强王者</option><option value="9">宗师</option>
+          <option value="8">大师</option><option value="7">钻石</option><option value="6">翡翠</option>
+          <option value="5">铂金</option><option value="4">黄金</option><option value="3">白银</option>
+          <option value="2">青铜</option><option value="1">黑铁</option>
+        </select>
+        <button class="primary" onclick="loadPick()">推荐</button>
+      </div>
+      <div class="err" id="pickErr"></div>
+      <div class="grid" id="pickResult" style="margin-top:14px"></div>
+    </div>
+  </section>
+
+  <!-- ===== Ban 手动 ===== -->
+  <section class="tab" id="tab-ban">
+    <div class="card">
+      <h3>Ban 建议 <span class="hint">留空=版本强势榜；填我方英雄=推荐克制我方的</span></h3>
+      <div class="row">
+        <input type="text" id="banMy" placeholder="我方英雄（可空）：薇恩,锤石">
+        <select id="banTier">
+          <option value="255">全段位</option><option value="10">最强王者</option><option value="9">宗师</option>
+          <option value="8">大师</option><option value="7">钻石</option><option value="6">翡翠</option>
+          <option value="5">铂金</option><option value="4">黄金</option><option value="3">白银</option>
+          <option value="2">青铜</option><option value="1">黑铁</option>
+        </select>
+        <button class="primary" onclick="loadBan()">建议</button>
+      </div>
+      <div class="err" id="banErr"></div>
+      <div class="grid" id="banResult" style="margin-top:14px"></div>
+    </div>
+  </section>
+
+  <!-- ===== 榜单 ===== -->
+  <section class="tab" id="tab-rank">
+    <div class="card">
+      <h3>英雄榜单 <span class="hint" id="rankVer"></span></h3>
+      <div class="row" style="margin-bottom:14px">
+        <select id="rankLane">
+          <option value="ALL">全位置</option><option value="TOP">上单</option><option value="JUNGLE">打野</option>
+          <option value="MIDDLE">中单</option><option value="BOTTOM">ADC</option><option value="SUPPORT">辅助</option>
+        </select>
+        <select id="rankTier">
+          <option value="255">全段位</option><option value="10">最强王者</option><option value="9">宗师</option>
+          <option value="8">大师</option><option value="7">钻石</option><option value="6">翡翠</option>
+          <option value="5">铂金</option><option value="4">黄金</option><option value="3">白银</option>
+          <option value="2">青铜</option><option value="1">黑铁</option>
+        </select>
+        <button class="primary" onclick="loadRank()">查看</button>
+      </div>
+      <div class="table-wrap" id="rankResult"></div>
+    </div>
+  </section>
+
+  <!-- ===== 对位克制 ===== -->
+  <section class="tab" id="tab-hero">
+    <div class="card">
+      <h3>对位克制 <span class="hint">某英雄被谁克制 / 克制谁</span></h3>
+      <div class="row">
+        <input type="text" id="heroName" placeholder="英雄名：劫 / Zed / 38">
+        <select id="heroLane">
+          <option value="ALL">全位置</option><option value="TOP">上单</option><option value="JUNGLE">打野</option>
+          <option value="MIDDLE">中单</option><option value="BOTTOM">ADC</option><option value="SUPPORT">辅助</option>
+        </select>
+        <button class="primary" onclick="loadHero()">查询</button>
+      </div>
+      <div class="err" id="heroErr"></div>
+      <div id="heroResult" style="margin-top:14px"></div>
+    </div>
+  </section>
+
+  <!-- ===== 加载画面 ===== -->
+  <section class="tab" id="tab-loading">
+    <div class="card">
+      <h3>加载画面 10 人信息 <span class="hint">自动读取 · 需在加载/对局中</span></h3>
+      <div class="msg" id="loadingMsg">正在检测对局状态…</div>
+      <div id="loadingBody" class="hidden"></div>
+    </div>
+  </section>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const heroImg = (alias) => alias ? `https://game.gtimg.cn/images/lol/act/img/champion/${alias}.png` : '';
+const winCls = (v) => v >= 52 ? 'win-hi' : v <= 48 ? 'win-lo' : 'win-mid';
+const tierCls = (t) => ({ T0: 't0', T1: 't1', T2: 't2', T3: 't3', T4: 't4' }[t] || 't3');
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+async function api(route, params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  const r = await fetch(`/api/${route}${qs ? '?' + qs : ''}`);
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || '请求失败');
+  return j.data;
+}
+
+function heroCard(h, { rank, extra } = {}) {
+  return `<div class="hero-card">
+    ${rank ? `<span class="rank">#${rank}</span>` : ''}
+    <img src="${heroImg(h.alias)}" onerror="this.style.visibility='hidden'">
+    <div class="name">${esc(h.title)}</div>
+    ${h.lane ? `<div class="lane">${esc(h.lane)}</div>` : ''}
+    <div class="win ${winCls(h.winRate)}">${h.winRate.toFixed ? h.winRate.toFixed(2) : h.winRate}%</div>
+    <span class="tier-badge ${tierCls(h.tier)}">${esc(h.tier)}</span>
+    ${extra ? `<div class="counters">${extra}</div>` : ''}
+  </div>`;
+}
+
+function pickExtra(h) {
+  return h.counterCount ? `克制 ${esc(h.counters.join('、'))}` : '';
+}
+function banExtra(h) {
+  return h.threatensCount ? `威胁: ${esc(h.threatens.join('、'))}` : `禁用率 ${h.banRate.toFixed ? h.banRate.toFixed(1) : h.banRate}%`;
+}
+function chip(alias, name, color) {
+  return `<span class="chip ${color}"><img src="${heroImg(alias)}" onerror="this.style.visibility='hidden'">${esc(name)}</span>`;
+}
+
+/* ---------- tabs ---------- */
+document.querySelectorAll('#tabs button').forEach((b) => {
+  b.onclick = () => {
+    document.querySelectorAll('#tabs button').forEach((x) => x.classList.remove('active'));
+    document.querySelectorAll('section.tab').forEach((x) => x.classList.remove('active'));
+    b.classList.add('active');
+    $('tab-' + b.dataset.tab).classList.add('active');
+    if (b.dataset.tab === 'rank') loadRank();
+    if (b.dataset.tab === 'loading') loadLoading();
+  };
+});
+
+/* ---------- 海克斯大乱斗 ---------- */
+function augmentLevelCls(l) { return { kSilver: 'lv-silver', kGold: 'lv-gold', kPrismatic: 'lv-prismatic' }[l] || 'lv-silver'; }
+function augmentLevelName(l) { return { kSilver: '白银', kGold: '黄金', kPrismatic: '棱彩' }[l] || l; }
+
+async function loadHex() {
+  const [heroes, augments] = await Promise.all([
+    api('hex/heroes', { top: 16 }),
+    api('hex/augments', { top: 16 }),
+  ]);
+  $('hexHeroes').innerHTML = heroes.map((h) => `<div class="hero-card">
+    <span class="rank">#${h.rank}</span>
+    <img src="${heroImg(h.alias)}" onerror="this.style.visibility='hidden'">
+    <div class="name">${esc(h.title)}</div>
+    <div class="win ${winCls(h.winRate)}">${h.winRate.toFixed(2)}%</div>
+    <div class="counters">登场 ${h.pickRate.toFixed(2)}%</div>
+    ${h.bestAugments.length ? `<div class="counters" style="color:var(--gold)">🃏 ${h.bestAugments.slice(0,2).map((a) => esc(a.name_cn)).join('、')}</div>` : ''}
+  </div>`).join('') || '<div class="msg">加载失败</div>';
+
+  $('hexAugments').innerHTML = augments.map((a) => `<div class="aug-card">
+    <span class="rank-tag">胜率榜 #${a.winRank}</span>
+    <img class="icon" src="${a.augment.small_Icon}" onerror="this.style.visibility='hidden'">
+    <div class="name">${esc(a.augment.name_cn)} <span class="sub2 ${augmentLevelCls(a.augment.level)}">${augmentLevelName(a.augment.level)}</span></div>
+    <div class="win ${winCls(a.winRate)}">${a.winRate.toFixed(2)}%</div>
+    <div class="sub2">出场 ${a.pickRate.toFixed(2)}% · ${esc(a.augment.tooltip || '')}</div>
+    ${a.bestHeroes.length ? `<div class="heroes">适合: ${a.bestHeroes.map(esc).join('、')}</div>` : ''}
+  </div>`).join('') || '<div class="msg">加载失败</div>';
+}
+
+/* ---------- LCU 状态轮询 ---------- */
+async function lcuStatus() {
+  try {
+    const s = await api('lcu/status');
+    const dot = $('lcuDot'), txt = $('lcuText');
+    if (s.connected) {
+      dot.className = 'dot on';
+      txt.textContent = `已连接${s.summoner ? ' · ' + s.summoner + (s.level ? ` (${s.level}级)` : '') : ''}`;
+      const badge = $('phaseBadge');
+      const phaseText = { None: '大厅', Lobby: '房间', Matchmaking: '匹配中', ChampSelect: '选人中', GameStart: '加载中', InProgress: '对局中', WaitingForStats: '结算中', Reconnect: '重连中' }[s.phase] || s.phase;
+      badge.textContent = '⏱ ' + phaseText;
+      badge.classList.remove('hidden');
+    } else {
+      dot.className = 'dot off';
+      txt.textContent = '客户端未连接';
+      $('phaseBadge').classList.add('hidden');
+    }
+  } catch (e) { /* ignore */ }
+}
+
+/* ---------- BP 助手 ---------- */
+let bpTimer = null;
+async function loadBP(force = false) {
+  if (!force && !$('autoRefresh').checked) return;
+  try {
+    const d = await api('champselect');
+    $('bpMsg').classList.add('hidden');
+    $('bpBody').classList.remove('hidden');
+    $('bpMyLane').textContent = `模式: ${d.modeLabel}`;
+    const chipB = (id, color) => chip(d.heroAliases[id] || '', d.heroNames[id] || String(id), color);
+    $('bpEnemyBans').innerHTML = d.enemyBans.length ? d.enemyBans.map((id) => chipB(id, 'red')).join('') : '—';
+    $('bpMyBans').innerHTML = d.myBans.length ? d.myBans.map((id) => chipB(id, 'blue')).join('') : '—';
+    $('bpEnemyPicks').innerHTML = d.enemyPicks.length
+      ? d.enemyPicks.map((id) => chipB(id, 'red')).join('')
+      : '<span class="sub">对面还没选</span>';
+    $('bpMyPicks').innerHTML = d.myPicks.length
+      ? d.myPicks.map((id) => chipB(id, 'blue')).join('')
+      : '<span class="sub">我方还没选</span>';
+
+    const isRanked = d.mode === 'ranked_solo' || d.mode === 'ranked_flex';
+    const isHex = d.mode === 'hextech_aram';
+    if (isRanked) {
+      $('bpPicks').innerHTML = d.picks.length
+        ? d.picks.map((h) => heroCard(h, { extra: pickExtra(h) })).join('')
+        : '<div class="msg">对面还没选英雄，选完自动刷新</div>';
+      $('bpBans').innerHTML = d.bans.length
+        ? d.bans.map((h) => heroCard(h, { extra: banExtra(h) })).join('')
+        : '<div class="msg">我方选完英雄后自动给出建议</div>';
+    } else if (isHex) {
+      $('bpPicks').innerHTML = (d.aramHeroes || []).map((h) => `<div class="hero-card">
+        <span class="rank">#${h.rank}</span>
+        <img src="${heroImg(h.alias)}" onerror="this.style.visibility='hidden'">
+        <div class="name">${esc(h.title)}</div>
+        <div class="win ${winCls(h.winRate)}">${h.winRate.toFixed(2)}%</div>
+        <div class="counters">登场 ${h.pickRate.toFixed(2)}%</div>
+        ${h.bestAugments.length ? `<div class="counters" style="color:var(--gold)">🃏 ${h.bestAugments.slice(0,2).map((a) => esc(a.name_cn)).join('、')}</div>` : ''}
+      </div>`).join('');
+      $('bpBans').innerHTML = '<div class="msg" style="border-color:rgba(11,198,227,.3)">🎲 海克斯大乱斗无 Ban 阶段 · 推荐参考上方英雄胜率与推荐海克斯牌（详见 🃏 海克斯大乱斗 页）</div>';
+    } else {
+      $('bpPicks').innerHTML = '<div class="msg">ℹ️ 当前模式（' + esc(d.modeLabel) + '）暂未支持</div>';
+      $('bpBans').innerHTML = '';
+    }
+  } catch (e) {
+    if (e.message === 'NOT_IN_CHAMPSELECT') {
+      $('bpMsg').textContent = '⏳ 不在选人阶段 — 进入选人界面后自动开始分析（自动刷新已开启）';
+      $('bpMsg').classList.remove('hidden');
+      $('bpBody').classList.add('hidden');
+    } else {
+      $('bpMsg').textContent = '❌ ' + e.message;
+      $('bpMsg').classList.remove('hidden');
+      $('bpBody').classList.add('hidden');
+    }
+  }
+}
+function startBP() {
+  loadBP(true);
+  if (bpTimer) clearInterval(bpTimer);
+  bpTimer = setInterval(loadBP, 4000);
+}
+
+/* ---------- Pick 手动 ---------- */
+async function loadPick() {
+  const btn = event.target; btn.disabled = true;
+  $('pickErr').textContent = '';
+  $('pickResult').innerHTML = '<div class="msg"><span class="loading-spin"></span> 分析中…</div>';
+  try {
+    const recs = await api('pick', { enemy: $('pickEnemy').value, lane: $('pickLane').value, tier: $('pickTier').value, top: 12 });
+    $('pickResult').innerHTML = recs.length
+      ? recs.map((h) => heroCard(h, { rank: h.rank, extra: pickExtra(h) })).join('')
+      : '<div class="msg">没有推荐结果，检查英雄名是否正确</div>';
+  } catch (e) {
+    $('pickErr').textContent = '❌ ' + e.message;
+    $('pickResult').innerHTML = '';
+  } finally { btn.disabled = false; }
+}
+
+/* ---------- Ban 手动 ---------- */
+async function loadBan() {
+  const btn = event.target; btn.disabled = true;
+  $('banErr').textContent = '';
+  $('banResult').innerHTML = '<div class="msg"><span class="loading-spin"></span> 分析中…</div>';
+  try {
+    const recs = await api('ban', { my: $('banMy').value, tier: $('banTier').value, top: 12 });
+    $('banResult').innerHTML = recs.map((h) => heroCard(h, { rank: h.rank, extra: banExtra(h) })).join('');
+  } catch (e) {
+    $('banErr').textContent = '❌ ' + e.message;
+    $('banResult').innerHTML = '';
+  } finally { btn.disabled = false; }
+}
+
+/* ---------- 榜单 ---------- */
+async function loadRank() {
+  const wrap = $('rankResult');
+  wrap.innerHTML = '<div class="msg"><span class="loading-spin"></span> 加载中…</div>';
+  try {
+    const [rows, versions] = await Promise.all([api('rank', { lane: $('rankLane').value, tier: $('rankTier').value, top: 60 }), api('versions')]);
+    $('rankVer').textContent = `版本 ${versions[0]?.name ?? ''} · 国服`;
+    const laneName = { TOP: '上单', JUNGLE: '打野', MIDDLE: '中单', BOTTOM: 'ADC', SUPPORT: '辅助', ALL: '全部' }[$('rankLane').value];
+    const tierName = $('rankTier').selectedOptions[0].textContent;
+    wrap.innerHTML = `<table>
+      <thead><tr><th style="width:52px">排名</th><th>英雄</th><th>位置</th><th>强度</th><th class="num">胜率</th><th class="num">登场率</th><th class="num">禁用率</th><th style="width:60px">变化</th></tr></thead>
+      <tbody>${rows.map((r) => `<tr>
+        <td>${r.rank}</td>
+        <td class="hero"><img src="${heroImg(r.alias)}" onerror="this.style.visibility='hidden'">${esc(r.title)}</td>
+        <td class="sub">${r.lane}</td>
+        <td><span class="tier-badge ${tierCls(r.tier)}">${esc(r.tier)}</span></td>
+        <td class="num ${winCls(r.winRate)}">${r.winRate.toFixed(2)}%</td>
+        <td class="num">${r.pickRate.toFixed(2)}%</td>
+        <td class="num">${r.banRate.toFixed(2)}%</td>
+        <td class="sub">${r.rankChange === 0 ? '-' : r.rankChange < 0 ? '↑' + (-r.rankChange) : '↓' + r.rankChange}</td>
+      </tr>`).join('')}</tbody></table>
+      <div class="sub" style="margin-top:8px">${laneName} · ${tierName}</div>`;
+  } catch (e) {
+    wrap.innerHTML = `<div class="msg">❌ ${esc(e.message)}</div>`;
+  }
+}
+
+/* ---------- 对位克制 ---------- */
+async function loadHero() {
+  const btn = event.target; btn.disabled = true;
+  $('heroErr').textContent = '';
+  $('heroResult').innerHTML = '<div class="msg"><span class="loading-spin"></span> 查询中…</div>';
+  try {
+    const d = await api('hero', { name: $('heroName').value, lane: $('heroLane').value });
+    const laneName = $('heroLane').selectedOptions[0].textContent;
+    $('heroResult').innerHTML = `
+      <div class="row" style="margin-bottom:14px"><img src="${heroImg(d.alias)}" style="width:44px;height:44px;border-radius:10px">
+        <span style="font-size:17px;font-weight:700">${esc(d.title)}</span><span class="sub">${laneName} 对位数据</span></div>
+      <div class="card" style="margin:0 0 12px;border-color:rgba(248,113,113,.3)">
+        <h3 style="color:var(--red)">克制 ${esc(d.title)}（对面选它时你选这些）</h3>
+        <div class="grid">${d.high.length ? d.high.map((h) => heroCard(h, { rank: h.rank })).join('') : '<div class="msg">无数据</div>'}</div>
+      </div>
+      <div class="card" style="margin:0;border-color:rgba(74,222,128,.3)">
+        <h3 style="color:var(--green)">被 ${esc(d.title)} 克制</h3>
+        <div class="grid">${d.low.length ? d.low.map((h) => heroCard(h, { rank: h.rank })).join('') : '<div class="msg">无数据</div>'}</div>
+      </div>`;
+  } catch (e) {
+    $('heroErr').textContent = '❌ ' + e.message;
+    $('heroResult').innerHTML = '';
+  } finally { btn.disabled = false; }
+}
+
+/* ---------- 加载画面 ---------- */
+let loadingTimer = null;
+async function loadLoading(force = false) {
+  if (!force && !$('autoRefresh').checked) return;
+  try {
+    const d = await api('loading');
+    $('loadingMsg').classList.add('hidden');
+    $('loadingBody').classList.remove('hidden');
+    const teams = [100, 200];
+    $('loadingBody').innerHTML = `<div class="sub" style="margin-bottom:8px">模式: ${esc(d.gameMode)} · 自动刷新中</div>` +
+      teams.map((team, ti) => {
+        const ps = d.players.filter((p) => p.teamId === team);
+        if (!ps.length) return '';
+        return `<div class="team-header ${ti === 0 ? 'blue' : 'red'}">${ti === 0 ? '🔵 我方' : '🔴 对面'}</div>
+        <table><thead><tr><th>召唤师</th><th>英雄</th><th>位置</th><th>段位</th><th class="num">等级</th></tr></thead>
+        <tbody>${ps.map((p) => `<tr>
+          <td>${esc(p.summonerName)}${p.isBot ? ' 🤖' : ''}</td>
+          <td class="hero">${p.isBot ? esc(p.title) : `<img src="${heroImg(p.alias)}" onerror="this.style.visibility='hidden'">${esc(p.title)}`}</td>
+          <td class="sub">${esc(p.position || '-')}</td>
+          <td>${esc(p.rank || '-')}</td>
+          <td class="num">${p.summonerLevel ?? '-'}</td>
+        </tr>`).join('')}</tbody></table>`;
+      }).join('');
+  } catch (e) {
+    if (e.message === 'NOT_IN_GAME') {
+      $('loadingMsg').textContent = '⏳ 不在对局中 — 进入加载画面后自动显示 10 人信息';
+      $('loadingMsg').classList.remove('hidden');
+      $('loadingBody').classList.add('hidden');
+    } else {
+      $('loadingMsg').textContent = '❌ ' + e.message;
+      $('loadingMsg').classList.remove('hidden');
+      $('loadingBody').classList.add('hidden');
+    }
+  }
+}
+function startLoading() {
+  loadLoading(true);
+  if (loadingTimer) clearInterval(loadingTimer);
+  loadingTimer = setInterval(loadLoading, 4000);
+}
+
+/* ---------- init ---------- */
+setInterval(lcuStatus, 3000);
+lcuStatus();
+startBP();
+startLoading();
+document.querySelector('#rankLane').addEventListener('change', loadRank);
+document.querySelector('#rankTier').addEventListener('change', loadRank);
+document.querySelector('#tabs button[data-tab="hex"]').addEventListener('click', loadHex);
+['pickEnemy', 'banMy', 'heroName'].forEach((id) => {
+  $(id).addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      if (id === 'pickEnemy') loadPick();
+      if (id === 'banMy') loadBan();
+      if (id === 'heroName') loadHero();
+    }
+  });
+});
+</script>
+</body>
+</html>
