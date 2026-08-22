@@ -236,7 +236,17 @@ program
         if (a.myBans.length) println(`🚫 我方 Ban: ${a.myBans.map((id) => heroDisplayName(heroes.get(id), id)).join('、')}`);
 
         if (isHex) {
-          println('\n🃏 海克斯大乱斗：无 Ban 阶段，参考英雄胜率与推荐海克斯牌');
+          println('\n🎴 海克斯大乱斗：无 Ban 阶段，翻牌进共享池，全员可选');
+          if (a.aramPool.length) {
+            println(`🏊 当前共享池（已翻开 ${a.aramPool.length} 个，按胜率排序）:`);
+            printTable(
+              [{ header: '#', align: 'right' }, { header: '英雄' }, { header: '胜率', align: 'right' }, { header: '登场率', align: 'right' }, { header: '推荐海克斯牌' }, { header: '备注' }],
+              a.aramPool.map((h, i) => [i + 1, h.title, h.winRate !== null ? pct(h.winRate) : '—', h.pickRate !== null ? pct(h.pickRate) : '—', h.bestAugments.slice(0, 2).map((x) => x.name_cn).join('、'), h.isMine ? '🌟 我翻的' : '']),
+            );
+          } else {
+            println('🎴 队友还在翻牌，翻开的英雄进池后自动刷新');
+          }
+          println('🃏 全英雄胜率榜（可参考池外英雄）:');
           printTable(
             [{ header: '#', align: 'right' }, { header: '英雄' }, { header: '胜率', align: 'right' }, { header: '登场率', align: 'right' }, { header: '推荐海克斯牌' }],
             (a.aramHeroes ?? []).map((h, i) => [i + 1, h.title, pct(h.winRate), pct(h.pickRate), h.bestAugments.slice(0, 2).map((x) => x.name_cn).join('、')]),

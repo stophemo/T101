@@ -31,6 +31,8 @@ export interface ChampSelectAnalysis {
   bans: BanRecommendation[];
   /** 海克斯/大乱斗英雄推荐（仅 aram 模式） */
   aramHeroes?: Awaited<ReturnType<typeof recommendHextechHeroes>>;
+  /** 海克斯大乱斗共享池：我方翻开的英雄（进池后全员可选），按胜率排序（仅 hextech_aram） */
+  aramPool: AramPoolEntry[];
   /** 生效段位 id（LCU 自动获取，默认 255 全段位） */
   tier: number;
   /** 生效段位名 */
@@ -71,6 +73,51 @@ export interface BoardPlayer {
   isMe: boolean;
   /** 是否当前操作者（正在 ban/pick） */
   acting: boolean;
+}
+
+/** 海克斯大乱斗共享池中的英雄（翻开的英雄，带胜率/海克斯牌，标注是否自己翻的） */
+export interface AramPoolEntry {
+  heroId: number;
+  title: string;
+  alias: string;
+  /** 百分比胜率；榜内无数据为 null */
+  winRate: number | null;
+  pickRate: number | null;
+  bestAugments: { name_cn: string; winRate: number }[];
+  /** 是否自己翻开（自己的卡牌） */
+  isMine: boolean;
+}
+
+/**
+ * 构建海克斯大乱斗共享池：我方已翻开（championId>0）的英雄去重，
+ * 匹配胜率榜数据（无榜数据的补空），按胜率降序。
+ */
+export function buildAramPool(
+  myTeam: { cellId: number; championId: number }[],
+  localPlayerCellId: number,
+  heroes: ReadonlyMap<number, { heroId: number; name: string; title: string; alias: string }>,
+  aramHeroes: Awaited<ReturnType<typeof recommendHextechHeroes>>,
+): AramPoolEntry[] {
+  const flipped = myTeam.filter((p) => p.championId > 0).map((p) => p.championId);
+  const mine = new Set(
+    myTeam.filter((p) => p.cellId === localPlayerCellId && p.championId > 0).map((p) => p.championId),
+  );
+  const rankMap = new Map(aramHeroes.map((h) => [h.heroId, h]));
+  return [...new Set(flipped)]
+    .map((id) => {
+      const r = rankMap.get(id);
+      const h = heroes.get(id);
+      return {
+        heroId: id,
+        title: h?.title ?? `#${id}`,
+        alias: h?.alias ?? '',
+        winRate: r?.winRate ?? null,
+        pickRate: r?.pickRate ?? null,
+        bestAugments: (r?.bestAugments ?? []).map((a) => ({ name_cn: a.name_cn, winRate: a.winRate })),
+        isMine: mine.has(id),
+      };
+    })
+    .sort((a, b) => (b.winRate ?? -1) - (a.winRate ?? -1));
 }
 
 const TIMER_PHASE_NAMES: Record<string, string> = {
@@ -190,6 +237,7 @@ export async function analyzeChampSelect(): Promise<ChampSelectAnalysis> {
     picks,
     bans,
     aramHeroes,
+    aramPool: isHextechMode(mode) ? buildAramPool(session.myTeam, session.localPlayerCellId, heroes, aramHeroes) : [],
     tier,
     tierName: TIER_NAMES[tier] ?? '全段位',
     timerPhase: TIMER_PHASE_NAMES[session.timer.phase] ?? session.timer.phase,

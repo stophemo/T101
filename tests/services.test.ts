@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { computeBanRecommendations } from '../src/services/ban.js';
 import { computePickRecommendations, inferLane, normalizeLane } from '../src/services/pick.js';
+import { buildAramPool } from '../src/services/champselect.js';
 import { tierNameToId, TIER_NAMES, type ChampionBase, type ChampionStat } from '../src/models.js';
 
 // ---------- 测试数据 ----------
@@ -172,4 +173,42 @@ test('ban 场景 B：无威胁数据时降级为版本梯度榜', () => {
   const recs = computeBanRecommendations(heroes, rankings, new Set([5]), [], 10);
   assert.ok(recs.length > 0);
   assert.ok(recs.every((r) => r.threatensCount === 0)); // 是场景 A 的输出
+});
+
+// ---------- 海克斯大乱斗共享池 ----------
+
+test('buildAramPool：翻开的英雄进池去重、按胜率排序、标注自己翻的', () => {
+  const myTeam = [
+    { cellId: 1, championId: 7 },   // 我：菲兹
+    { cellId: 2, championId: 6 },   // 队友：盖伦
+    { cellId: 3, championId: 7 },   // 队友也翻到菲兹 -> 去重
+    { cellId: 4, championId: 0 },   // 还没翻
+    { cellId: 5, championId: 0 },   // 还没翻
+  ];
+  const aramHeroes = [
+    { heroId: 6, title: '盖伦', alias: 'Garen', winRate: 49.2, pickRate: 10, rank: 2, bestAugments: [], bestPartners: [] },
+    { heroId: 7, title: '菲兹', alias: 'Fizz', winRate: 52.8, pickRate: 8, rank: 1, bestAugments: [], bestPartners: [] },
+  ];
+  const pool = buildAramPool(myTeam, 1, heroes, aramHeroes);
+  assert.equal(pool.length, 2);                    // 去重后 2 个
+  assert.equal(pool[0].heroId, 7);                 // 菲兹胜率更高排第一
+  assert.equal(pool[0].isMine, true);              // 我翻的
+  assert.equal(pool[1].isMine, false);
+  assert.equal(pool[1].heroId, 6);
+});
+
+test('buildAramPool：榜外英雄补空胜率，未翻牌为空池', () => {
+  const poolEmpty = buildAramPool(
+    [{ cellId: 1, championId: 0 }, { cellId: 2, championId: 0 }],
+    1, heroes, [],
+  );
+  assert.deepEqual(poolEmpty, []);
+  const pool = buildAramPool(
+    [{ cellId: 1, championId: 1 }, { cellId: 2, championId: 0 }],
+    1, heroes, [], // 安妮不在榜内
+  );
+  assert.equal(pool.length, 1);
+  assert.equal(pool[0].title, '安妮');
+  assert.equal(pool[0].winRate, null);             // 无榜数据
+  assert.deepEqual(pool[0].bestAugments, []);
 });
