@@ -8,7 +8,7 @@ import { recommendPick, inferLane } from '../services/pick.js';
 import { recommendBan } from '../services/ban.js';
 import { analyzeChampSelect } from '../services/champselect.js';
 import { recommendAugments, recommendHextechHeroes } from '../services/hextech.js';
-import { findLcuConnectionCached, getGameflowPhase, getGameflowSession, getRankedStats, getCurrentSummoner } from '../api/lcu.js';
+import { findLcuConnectionCached, getGameflowPhase, getGameflowSession, getRankedStats, getCurrentSummoner, lcuGet } from '../api/lcu.js';
 import { heroDisplayName } from '../models.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -104,6 +104,27 @@ async function handleApi(route: string, params: URLSearchParams, res: ServerResp
         high: await withAlias(stats.high),
         low: await withAlias(stats.low),
       });
+      return;
+    }
+    case 'lobby': {
+      // 队伍聊天房间：接受对局后展示队友（lol-lobby/v2/lobby 只读）
+      try {
+        const lobby = await lcuGet<{
+          localMember?: { summonerId: number; gameName?: string; displayName?: string; summonerLevel?: number; profileIconId?: number };
+          members?: { summonerId: number; gameName?: string; displayName?: string; summonerLevel?: number; profileIconId?: number }[];
+          gameConfig?: { queueId?: number };
+        }>('/lol-lobby/v2/lobby');
+        const members = (lobby.members ?? []).map((m) => ({
+          summonerId: m.summonerId,
+          name: m.displayName || m.gameName || `召唤师${m.summonerId}`,
+          level: m.summonerLevel,
+          icon: m.profileIconId,
+          isMe: m.summonerId === lobby.localMember?.summonerId,
+        }));
+        ok(res, { queueId: lobby.gameConfig?.queueId, localSummonerId: lobby.localMember?.summonerId, members });
+      } catch (e) {
+        fail(res, (e as Error).message);
+      }
       return;
     }
     case 'lcu/status': {

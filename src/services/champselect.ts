@@ -35,7 +35,50 @@ export interface ChampSelectAnalysis {
   tier: number;
   /** 生效段位名 */
   tierName: string;
+  // ---------- 阶段感知（贴合真实 BP 流程） ----------
+  /** timer 阶段中文：位置规划 / 禁用选择 / 最终确认 */
+  timerPhase: string;
+  /** 本阶段剩余秒数 */
+  timeLeftSec: number;
+  /** 当前进行中的操作（null = 全部完成/等待） */
+  currentAction: {
+    type: 'ban' | 'pick';
+    /** 操作者名字 */
+    actorName: string;
+    /** 是否我方 */
+    isAlly: boolean;
+    /** 是否是我 */
+    isMe: boolean;
+    /** 操作者位置（LCU 口径） */
+    lane: string;
+  } | null;
+  /** 已完成操作数（第几手，1-10） */
+  completedActions: number;
+  /** 总操作数（ban 10 + pick 10） */
+  totalActions: number;
+  /** 我方 5 人（含自己）按楼序：名字/位置/已选英雄/是否当前操作者 */
+  myTeamBoard: BoardPlayer[];
+  /** 对面 5 人按楼序 */
+  enemyTeamBoard: BoardPlayer[];
 }
+
+/** 选人棋盘上的一个玩家 */
+export interface BoardPlayer {
+  cellId: number;
+  summonerName: string;
+  lane: string;
+  championId: number;
+  isMe: boolean;
+  /** 是否当前操作者（正在 ban/pick） */
+  acting: boolean;
+}
+
+const TIMER_PHASE_NAMES: Record<string, string> = {
+  PLANNING: '位置规划',
+  BAN_PICK: '禁用/选择',
+  FINALIZATION: '最终确认',
+  IDLE: '等待',
+};
 
 /** 补全 summonerName（新版 LCU session 可能不含名字） */
 async function enrichNames(session: ChampSelectSession): Promise<Map<number, string>> {
@@ -82,6 +125,42 @@ export async function analyzeChampSelect(): Promise<ChampSelectAnalysis> {
     .filter((p) => p.assignedPosition && !['none', 'utility', 'fill'].includes(p.assignedPosition))
     .map((p) => p.assignedPosition.toUpperCase());
 
+  // ---------- 阶段感知：真实 BP 流程（ban 10 人同时 → pick 按楼序轮选） ----------
+  const nameOf = (p: { cellId: number; summonerId: number; summonerName?: string } | undefined) => {
+    if (!p) return '未知';
+    return p.summonerName ?? extraNames.get(p.summonerId) ?? '召唤师';
+  };
+  // actions 数组按流程顺序排列（每个 cell 的 ban/pick 动作），第一个未完成的就是当前操作
+  const completedActions = session.actions
+    .flat()
+    .filter((a) => a.completed).length;
+  const totalActions = session.actions.flat().length;
+  const pending = session.actions.flat().find((a) => !a.completed) ?? null;
+  let currentAction: ChampSelectAnalysis['currentAction'] = null;
+  if (pending) {
+    const actor = [...session.myTeam, ...session.theirTeam].find((p) => p.cellId === pending.actorCellId);
+    const isAlly = !!session.myTeam.find((p) => p.cellId === pending.actorCellId);
+    currentAction = {
+      type: pending.type === 'ban' ? 'ban' : 'pick',
+      actorName: nameOf(actor),
+      isAlly,
+      isMe: pending.actorCellId === session.localPlayerCellId,
+      lane: actor?.assignedPosition ?? '',
+    };
+  }
+  const board = (team: typeof session.myTeam): BoardPlayer[] =>
+    team
+      .slice()
+      .sort((a, b) => a.cellId - b.cellId) // 按楼序
+      .map((p) => ({
+        cellId: p.cellId,
+        summonerName: nameOf(p),
+        lane: p.assignedPosition ?? '',
+        championId: p.championId,
+        isMe: p.cellId === session.localPlayerCellId,
+        acting: pending?.actorCellId === p.cellId,
+      }));
+
   const [picks, bans, aramHeroes] = await Promise.all([
     // 仅峡谷排位激活 BP 推荐（按账号段位查对位/榜单）
     isRankedMode(mode) && enemyPicks.length
@@ -113,5 +192,12 @@ export async function analyzeChampSelect(): Promise<ChampSelectAnalysis> {
     aramHeroes,
     tier,
     tierName: TIER_NAMES[tier] ?? '全段位',
+    timerPhase: TIMER_PHASE_NAMES[session.timer.phase] ?? session.timer.phase,
+    timeLeftSec: Math.max(0, Math.round((session.timer.adjustedTimeLeftInPhase ?? 0) / 1000)),
+    currentAction,
+    completedActions,
+    totalActions,
+    myTeamBoard: board(session.myTeam),
+    enemyTeamBoard: board(session.theirTeam),
   };
 }

@@ -217,6 +217,12 @@ program
         const a = await analyzeChampSelect();
         const heroes = await getHeroList();
         println(`⏱️  选人阶段: ${a.phase} · 模式: ${a.modeLabel} · 段位: ${a.tierName} · 我方位置: ${a.myLane === 'ALL' ? '未分配' : a.myLane}`);
+        const act = a.currentAction;
+        if (act) {
+          println(`🔄  ${a.timerPhase} · 剩余 ${a.timeLeftSec}s · 第 ${a.completedActions + 1}/${a.totalActions} 手 · ${act.isAlly ? '我方' : '对面'} ${act.lane} ${act.actorName} 正在${act.type === 'ban' ? '禁用' : '选择'}${act.isMe ? ' ← 轮到你！' : ''}`);
+        } else {
+          println(`🔄  ${a.timerPhase} · 已操作 ${a.completedActions}/${a.totalActions} 手`);
+        }
         if (a.mode === 'hextech_aram' && a.queueId !== undefined && !KNOWN_QUEUE_IDS.has(a.queueId)) {
           println(`ℹ️  队列 id=${a.queueId} 不在已知列表，已按海克斯大乱斗处理（如与实际不符请反馈）`);
         }

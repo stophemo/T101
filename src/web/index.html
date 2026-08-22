@@ -128,21 +128,28 @@
   <!-- ===== BP 助手（自动） ===== -->
   <section class="tab active" id="tab-bp">
     <div class="card">
-      <h3>选人阶段实时分析 <span class="hint">自动从本地客户端读取 · 需在选人界面</span></h3>
-      <div class="msg" id="bpMsg">正在检测选人状态…</div>
+      <h3>对局流程实时分析 <span class="hint">自动从本地客户端读取 · 按真实 BP 流程展示</span></h3>
+      <div class="msg" id="bpMsg">正在检测对局状态…</div>
       <div id="bpBody" class="hidden">
-        <div class="row" style="margin-bottom:10px">
+        <div class="row" style="margin-bottom:10px;flex-wrap:wrap;gap:12px">
           <span class="sub">我方位置:</span><span id="bpMyLane" class="sub" style="color:var(--cyan)"></span>
-          <span class="sub" style="margin-left:12px">对面 Ban:</span><span id="bpEnemyBans" class="sub"></span>
-          <span class="sub" style="margin-left:12px">我方 Ban:</span><span id="bpMyBans" class="sub"></span>
+          <span class="phase-badge" id="bpTimerPhase" style="margin-left:8px"></span>
+          <span class="sub" id="bpTimer"></span>
+          <span class="sub" id="bpTurn" style="margin-left:auto"></span>
         </div>
-        <div class="row" style="margin-bottom:14px">
-          <span class="sub">👹 对面已选:</span>
-          <div class="chips" id="bpEnemyPicks"></div>
+        <div class="card" style="margin:0 0 14px;border-color:rgba(248,113,113,.2)">
+          <h3 style="color:var(--red)">🚫 禁用阶段 <span class="hint">10 人同时选，每人 1 个，共 10 个</span></h3>
+          <div class="row" style="gap:18px;flex-wrap:wrap">
+            <div><div class="sub" style="margin-bottom:5px;color:var(--cyan)">🔵 我方</div><div class="chips" id="bpMyBanSlots"></div></div>
+            <div><div class="sub" style="margin-bottom:5px;color:var(--red)">🔴 对面</div><div class="chips" id="bpEnemyBanSlots"></div></div>
+          </div>
         </div>
-        <div class="row" style="margin-bottom:14px">
-          <span class="sub">😊 我方已选:</span>
-          <div class="chips" id="bpMyPicks"></div>
+        <div class="card" style="margin:0 0 14px">
+          <h3>⚔ 选人阶段 <span class="hint">按楼序轮选 B1B2→R1R2R3→B3B4→R4R5→B5，每轮 30s</span></h3>
+          <div class="sub" style="color:var(--cyan);margin-bottom:4px">🔵 我方</div>
+          <div class="board" id="bpMyBoard"></div>
+          <div class="sub" style="color:var(--red);margin:10px 0 4px">🔴 对面</div>
+          <div class="board" id="bpEnemyBoard"></div>
         </div>
         <div class="card" style="margin:0;border-color:rgba(74,222,128,.25)">
           <h3 style="color:var(--green)">🎯 推荐 Pick</h3>
@@ -350,6 +357,7 @@ async function lcuStatus() {
     const s = await api('lcu/status');
     const dot = $('lcuDot'), txt = $('lcuText');
     if (s.connected) {
+      curPhase = s.phase; // 记录当前阶段（Lobby/ChampSelect/GameStart/InProgress...）
       dot.className = 'dot on';
       txt.textContent = `已连接${s.summoner ? ' · ' + s.summoner + (s.level ? ` (${s.level}级)` : '') : ''}`;
       const badge = $('phaseBadge');
@@ -357,6 +365,7 @@ async function lcuStatus() {
       badge.textContent = '⏱ ' + phaseText;
       badge.classList.remove('hidden');
     } else {
+      curPhase = 'None';
       dot.className = 'dot off';
       txt.textContent = '客户端未连接';
       $('phaseBadge').classList.add('hidden');
@@ -364,24 +373,88 @@ async function lcuStatus() {
   } catch (e) { /* ignore */ }
 }
 
-/* ---------- BP 助手 ---------- */
+/* ---------- BP 助手（对局流程视图） ---------- */
 let bpTimer = null;
+let curPhase = 'None'; // 由 lcuStatus 更新：Lobby/ChampSelect/GameStart/InProgress...
+const LANE_CN = { TOP: '上单', JUNGLE: '打野', MIDDLE: '中单', BOTTOM: '下路', SUPPORT: '辅助', UTILITY: '辅助', none: '?', fill: '补位', NONE: '?', FILL: '补位' };
+
+/** 选人棋盘格子 */
+function slotHTML(p, d) {
+  return `<div class="slot ${p.isMe ? 'me' : ''} ${p.acting ? 'acting' : ''}">
+    ${p.acting ? '<span class="tag">▶ 操作中</span>' : ''}
+    ${p.championId > 0
+      ? `<img src="${heroImg(d.heroAliases[p.championId] || '')}" onerror="this.style.visibility='hidden'">`
+      : '<div style="height:40px"></div>'}
+    <div class="nm">${esc(p.summonerName)}${p.isMe ? ' (我)' : ''}</div>
+    <div class="ln">${LANE_CN[p.lane] || esc(p.lane || '?')}</div>
+  </div>`;
+}
+
+/** ban 槽位（固定 5 格） */
+function banSlotsHTML(bans, d, color) {
+  const slots = [];
+  for (let i = 0; i < 5; i++) {
+    const id = bans[i] || 0;
+    slots.push(id > 0
+      ? `<span class="chip ${color}"><img src="${heroImg(d.heroAliases[id] || '')}" onerror="this.style.visibility='hidden'">${esc(d.heroNames[id] || id)}</span>`
+      : '<span class="chip" style="opacity:.3">—</span>');
+  }
+  return slots.join('');
+}
+
+/** 队伍房间：接受对局后显示队友 */
+async function loadLobby() {
+  try {
+    const d = await api('lobby');
+    $('bpMsg').classList.add('hidden');
+    $('bpBody').classList.remove('hidden');
+    $('bpMyLane').textContent = '队伍房间';
+    $('bpTimerPhase').textContent = '等待开始';
+    $('bpTimer').textContent = '';
+    $('bpTurn').textContent = '等待 Ban 阶段开始…';
+    $('bpMyBanSlots').innerHTML = '';
+    $('bpEnemyBanSlots').innerHTML = '';
+    $('bpMyBoard').innerHTML = '';
+    $('bpEnemyBoard').innerHTML = `<div class="sub" style="margin-bottom:8px">👥 队伍成员（${d.members.length}/5）— 接受对局后队友已就位</div>`
+      + `<div class="board">${d.members.map((m) => `<div class="slot ${m.isMe ? 'me' : ''}">
+        <img src="${m.icon ? `https://game.gtimg.cn/images/lol/act/img/profileicon/${m.icon}.png` : ''}" onerror="this.style.visibility='hidden'">
+        <div class="nm">${esc(m.name)}${m.isMe ? ' (我)' : ''}</div>
+        <div class="ln">Lv.${m.level ?? '-'}</div>
+      </div>`).join('')}</div>`;
+    $('bpPicks').innerHTML = '';
+    $('bpBans').innerHTML = '';
+  } catch (e) {
+    $('bpMsg').textContent = '❌ ' + e.message;
+    $('bpMsg').classList.remove('hidden');
+    $('bpBody').classList.add('hidden');
+  }
+}
+
 async function loadBP(force = false) {
   if (!force && !$('autoRefresh').checked) return;
+  // 队伍房间阶段：显示队友（接受对局 → 房间 → ban）
+  if (curPhase === 'Lobby') { await loadLobby(); return; }
   try {
     const d = await api('champselect');
     $('bpMsg').classList.add('hidden');
     $('bpBody').classList.remove('hidden');
     $('bpMyLane').textContent = `模式: ${d.modeLabel} · 段位: ${d.tierName}`;
-    const chipB = (id, color) => chip(d.heroAliases[id] || '', d.heroNames[id] || String(id), color);
-    $('bpEnemyBans').innerHTML = d.enemyBans.length ? d.enemyBans.map((id) => chipB(id, 'red')).join('') : '—';
-    $('bpMyBans').innerHTML = d.myBans.length ? d.myBans.map((id) => chipB(id, 'blue')).join('') : '—';
-    $('bpEnemyPicks').innerHTML = d.enemyPicks.length
-      ? d.enemyPicks.map((id) => chipB(id, 'red')).join('')
-      : '<span class="sub">对面还没选</span>';
-    $('bpMyPicks').innerHTML = d.myPicks.length
-      ? d.myPicks.map((id) => chipB(id, 'blue')).join('')
-      : '<span class="sub">我方还没选</span>';
+    // 阶段横幅：阶段 + 倒计时 + 轮到谁
+    $('bpTimerPhase').textContent = d.timerPhase;
+    $('bpTimer').textContent = d.timeLeftSec > 0 ? `剩余 ${d.timeLeftSec}s` : '';
+    const act = d.currentAction;
+    if (act) {
+      const laneCn = LANE_CN[act.lane] || '';
+      $('bpTurn').textContent = `第 ${d.completedActions + 1}/${d.totalActions} 手 · ${act.isAlly ? '🔵我方' : '🔴对面'} ${laneCn} ${act.actorName} 正在${act.type === 'ban' ? '禁用' : '选择'}${act.isMe ? ' ← 轮到你！' : ''}`;
+    } else {
+      $('bpTurn').textContent = `已操作 ${d.completedActions}/${d.totalActions} 手`;
+    }
+    // ban 槽位（5+5）
+    $('bpMyBanSlots').innerHTML = banSlotsHTML(d.myBans, d, 'blue');
+    $('bpEnemyBanSlots').innerHTML = banSlotsHTML(d.enemyBans, d, 'red');
+    // 5v5 选人棋盘（按楼序，操作者高亮）
+    $('bpMyBoard').innerHTML = d.myTeamBoard.map((p) => slotHTML(p, d)).join('');
+    $('bpEnemyBoard').innerHTML = d.enemyTeamBoard.map((p) => slotHTML(p, d)).join('');
 
     const isRanked = d.mode === 'ranked_solo' || d.mode === 'ranked_flex';
     const isHex = d.mode === 'hextech_aram';
@@ -408,7 +481,9 @@ async function loadBP(force = false) {
     }
   } catch (e) {
     if (e.message === 'NOT_IN_CHAMPSELECT') {
-      $('bpMsg').textContent = '⏳ 不在选人阶段 — 进入选人界面后自动开始分析（自动刷新已开启）';
+      $('bpMsg').textContent = curPhase === 'GameStart' || curPhase === 'InProgress'
+        ? '🎬 对局加载中 — 10 人信息见「加载画面」面板'
+        : '⏳ 未在对局流程中 — 匹配成功进入队伍房间/选人后自动开始分析（自动刷新已开启）';
       $('bpMsg').classList.remove('hidden');
       $('bpBody').classList.add('hidden');
     } else {
