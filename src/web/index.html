@@ -639,7 +639,7 @@ function lobbyCard(m, sel) {
     <div class="ln">Lv.${m.level ?? '-'}</div>
     ${v
       ? `<div class="ln" style="color:${color};font-size:10px">${v.verdict} ${v.winRate}% · KDA ${v.kda}${v.modeGames >= 2 ? `<br>本模式 ${v.modeWinRate}%(${v.modeGames}场)` : ''}</div>`
-      : '<div class="ln" style="font-size:10px">最近 21 场无该模式战绩</div>'}
+      : '<div class="ln" style="font-size:10px">近期无该模式战绩</div>'}
   </div>`;
 }
 
@@ -991,7 +991,7 @@ function recentPanelHTML(name, stats, recent) {
   return `<h3>📋 ${esc(name)} 近期战绩 <span class="hint">${stats ? `${stats.verdict} ${stats.winRate}% · KDA ${stats.kda}` : ''} · 点击卡片切换</span></h3>`
     + (recent.length
       ? `<div class="recent-list">${recent.map(recentRow).join('')}</div>`
-      : '<div class="msg">暂无战绩数据</div>');
+      : '<div class="msg">近期无战绩数据</div>');
 }
 function frCard(f, sel) {
   const v = f.stats;
@@ -1006,7 +1006,7 @@ function frCard(f, sel) {
       ? `<div class="meta">近10场 ${v.winRate.toFixed(0)}% · KDA ${v.kda}</div>
          <div class="rec" style="color:${v.score >= 60 ? 'var(--green)' : v.score >= 50 ? 'var(--gold)' : 'var(--red)'}">${v.verdict}（${v.score}分）</div>
          <div class="rec">${rec}</div>`
-      : '<div class="meta">近期战绩不可用</div>'}
+      : '<div class="meta">近期无战绩数据</div>'}
   </div>`;
 }
 function selectFriend(puuid) {
