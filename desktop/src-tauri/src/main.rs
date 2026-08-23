@@ -221,7 +221,9 @@ fn apply_dock(dock: &Dock, forced: bool) {
     *last = pos;
 }
 
-/// F9 / 面板按钮：一键排布 —— 目标窗口左 2/3，面板贴其右侧（1/3 内右对齐，上限 560px）
+/// F9 / 面板按钮：一键排布
+/// - 目标未铺满屏（桌面客户端/窗口化游戏）：目标窗口左 2/3，面板占右 1/3（右对齐，上限 560px）
+/// - 目标已铺满屏（游戏中无边框全屏/最大化）：**不动游戏窗口**，面板仅贴工作区右缘悬浮（对局中只看战绩）
 fn arrange(dock: &Dock) {
     let Some(panel) = *dock.panel.lock().unwrap() else {
         return;
@@ -238,6 +240,17 @@ fn arrange(dock: &Dock) {
     };
     let ww = wa.right - wa.left;
     let wh = wa.bottom - wa.top;
+    let mut tr = RECT::default();
+    if !unsafe { GetWindowRect(target, &mut tr) }.is_ok() {
+        return;
+    }
+    let tw = tr.right - tr.left;
+    let th = tr.bottom - tr.top;
+    if tw >= ww - 4 && th >= wh - 4 {
+        // 游戏全屏：只归位面板到工作区右缘（贴屏幕，浮于游戏之上），绝不缩游戏窗口
+        set_window_pos(panel, wa.right - PANEL_W - MARGIN, wa.top, PANEL_W, wh, true);
+        return;
+    }
     let gw = ww * 2 / 3;
     let remaining = ww - gw - MARGIN;
     let pw = remaining.min(ARRANGE_MAX_W).max(320);

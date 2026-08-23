@@ -668,6 +668,13 @@
   body.side .recent-row .recent-summary { grid-template-columns: 28px 36px 1fr 40px 36px 12px; gap: 4px; padding: 4px 8px; }
   body.side .recent-row .rm { display: none; }
   body.side #frList { grid-template-columns: 1fr; }
+  /* 游戏/加载：10 人战绩表格紧凑化（400px 面板内尽量不横向滚动） */
+  body.side table { min-width: 0; font-size: 11px; }
+  body.side th, body.side td { padding: 4px 5px; }
+  body.side td.hero img { width: 22px; height: 22px; }
+  body.side td .sub { font-size: 10px; }
+  body.side .team-header { margin: 10px 0 4px; }
+  body.side #stGamePlayers, body.side #stLoadingBody { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 </style>
 </head>
 <body>
