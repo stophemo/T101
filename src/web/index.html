@@ -619,9 +619,59 @@
   .tab-btn { position: relative; }
   .tab-btn.active { color: var(--gold) !important; border-color: var(--gold) !important; background: rgba(214,163,93,.12) !important; font-weight: 700; }
   .tab-btn.active::after { content: ''; position: absolute; left: 50%; bottom: -3px; transform: translateX(-50%); width: 60%; height: 2px; border-radius: 1px; background: var(--gold); }
+
+  /* ===== 侧边停靠面板（?side=1，Tauri 壳 400px） ===== */
+  body.side .app-shell { display: block; }
+  body.side .sidebar { position: sticky; top: 0; z-index: 30; width: 100%; height: auto; flex-direction: row; align-items: center; gap: 4px; padding: 5px 8px; border-right: 0; border-bottom: 1px solid #1c2a37; background: #0d151d; user-select: none; -webkit-user-select: none; }
+  body.side .brand, body.side .side-label, body.side .side-footer, body.side .tool-nav { display: none !important; }
+  body.side #tabs { display: flex; flex-direction: row; gap: 3px; margin: 0; }
+  body.side #tabs button { width: auto; min-height: 28px; padding: 4px 10px; gap: 5px; border-radius: 3px; font-size: 12px; justify-content: center; }
+  body.side #tabs .nav-icon { width: auto; font-size: 12px; }
+  body.side #tabs .nav-arrow { display: none; }
+  body.side .app-main { width: 100%; margin-left: 0; }
+  body.side .wrap { max-width: none; padding: 8px 10px 34px; }
+  body.side header { min-height: 0; gap: 6px; padding: 6px 0 8px; margin-bottom: 10px; }
+  body.side .page-heading { display: flex; align-items: center; gap: 8px; }
+  body.side .page-heading h1 { font-size: 14px; margin: 0; }
+  body.side .page-heading p, body.side .kicker { display: none; }
+  body.side .topbar-controls { gap: 6px; }
+  body.side .status { font-size: 11px; }
+  body.side .status-label { display: none; }
+  body.side .phase-badge { padding: 3px 8px; font-size: 10px; }
+  body.side .switch span:not(.switch-track) { display: none; }
+  body.side .panel-tools { display: flex; gap: 4px; }
+  body.side .panel-tools button { min-height: 26px; padding: 3px 8px; font-size: 11px; border-radius: 3px; }
+  body.side .panel-tools #panelDock.on { border-color: #267b81; color: #7fe3e0; background: #12343a; }
+  body.side .panel-tools #panelClose { color: #c98a8a; }
+  body.side .card { padding: 12px; margin-bottom: 10px; }
+  body.side .card h3 { font-size: 13px; margin-bottom: 10px; min-height: 18px; }
+  body.side .card .card { margin: 12px 0 0; padding: 12px 0 0; }
+  body.side .stage-top { padding: 12px 14px; margin-bottom: 10px; }
+  body.side .st-timer { font-size: 22px; }
+  body.side .flow { gap: 4px; margin-top: 8px; }
+  body.side .flow .fp { padding: 3px 8px; font-size: 10px; }
+  body.side .board { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
+  body.side .slot { padding: 5px 2px; }
+  body.side .slot img { width: 30px; height: 30px; }
+  body.side .slot .nm { font-size: 10px; margin-top: 3px; }
+  body.side .slot .ln { font-size: 9px; }
+  body.side .slot .cardback { width: 30px; height: 30px; font-size: 14px; }
+  body.side .ban-board { grid-template-columns: 1fr; gap: 10px; }
+  body.side .ban-slots { gap: 4px; }
+  body.side .ban-slot img { width: 34px; height: 34px; }
+  body.side .grid { gap: 6px; }
+  body.side .hero-card { padding: 10px 8px; }
+  body.side .hero-card img { width: 44px; height: 44px; }
+  body.side .hero-card .name { font-size: 12px; }
+  body.side .msg { padding: 14px; font-size: 12px; }
+  body.side .mp-wrap { grid-template-columns: 1fr; }
+  body.side .recent-row .recent-summary { grid-template-columns: 28px 36px 1fr 40px 36px 12px; gap: 4px; padding: 4px 8px; }
+  body.side .recent-row .rm { display: none; }
+  body.side #frList { grid-template-columns: 1fr; }
 </style>
 </head>
 <body>
+<script>if (new URLSearchParams(location.search).has('side')) document.body.classList.add('side');</script>
 <div class="app-shell">
   <aside class="sidebar">
     <div class="brand">
@@ -659,6 +709,12 @@
           <div class="status" id="lcuStatus"><span class="dot" id="lcuDot"></span><span class="status-label">客户端</span><span id="lcuText">检测中…</span></div>
           <span class="phase-badge hidden" id="phaseBadge"></span>
           <label class="switch"><input type="checkbox" id="autoRefresh" checked><span class="switch-track"></span><span>自动同步</span></label>
+          <div class="panel-tools hidden">
+            <button id="panelArrange" title="一键排布：游戏/客户端窗口左 2/3，面板贴右侧">⧉ 排布</button>
+            <button id="panelDock" title="停靠跟随开关（快捷键 F10）">⧉ 停靠</button>
+            <button id="panelRefresh" title="重新加载页面">↻</button>
+            <button id="panelClose" title="退出面板（快捷键 Ctrl+Alt+F12）">✕</button>
+          </div>
         </div>
       </header>
 
@@ -1906,6 +1962,38 @@ document.querySelector('#rankTier').addEventListener('change', loadRank);
     }
   });
 });
+
+/* ===== 侧边停靠面板（?side=1 + Tauri 壳） ===== */
+if (document.body.classList.contains('side')) {
+  const SIDE_TAURI = window.__TAURI__;
+  const run = (p) => Promise.resolve(p).catch(() => {});
+  // 非 Tauri 环境（普通浏览器）下隐藏面板按钮
+  if (!SIDE_TAURI) {
+    const pt = document.querySelector('.panel-tools');
+    if (pt) pt.remove();
+  }
+  // 顶部条拖拽移动（无边框窗口）：按住非按钮区域拖动
+  const sidebar = document.querySelector('.sidebar');
+  if (sidebar) {
+    sidebar.addEventListener('mousedown', (e) => {
+      if (e.target.closest('button')) return;
+      if (SIDE_TAURI) run(SIDE_TAURI.window.getCurrentWindow().startDragging());
+    });
+  }
+  if (SIDE_TAURI) {
+    const $b = (id) => document.getElementById(id);
+    const dockBtn = $b('panelDock');
+    let docked = true;
+    const syncDock = () => { if (dockBtn) dockBtn.classList.toggle('on', docked); };
+    run(SIDE_TAURI.core.invoke('dock_status').then((v) => { docked = !!v; syncDock(); }));
+    const on = (id, fn) => { const el = $b(id); if (el) el.onclick = () => run(fn()); };
+    on('panelArrange', () => SIDE_TAURI.core.invoke('arrange_windows'));
+    on('panelDock', () => SIDE_TAURI.core.invoke('set_docked', { enabled: !docked }).then((v) => { docked = !!v; syncDock(); }));
+    on('panelRefresh', () => location.reload());
+    on('panelClose', () => SIDE_TAURI.window.getCurrentWindow().close());
+    syncDock();
+  }
+}
 </script>
 </body>
 </html>

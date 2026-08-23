@@ -184,7 +184,35 @@ t101 cache clear                 # 清缓存与快照
 ```
 t101 web            # 启动后自动打开浏览器 http://127.0.0.1:8765
 t101 web -p 9000    # 自定义端口
+t101 web --panel    # 不开浏览器，改为启动侧边停靠面板（需先 npm run panel:build）
+t101 panel          # 仅启动侧边停靠面板（自动等待 Web 服务，可搭配独立启动的 t101 web）
 ```
+
+### 🪟 侧边停靠面板（Tauri 2 壳，解决“两个大窗口看不过来”）
+
+对局时把 Web 界面缩成一个 **400px 无边框小窗**，自动贴到 LOL 客户端/游戏窗口右侧：
+
+```
+npm run panel:build   # 首次构建 Rust 壳（需 Rust + mingw，见下文；产物 6~7MB）
+t101 web --panel      # 一键：Web 服务 + 面板
+```
+
+- **跟随停靠**：自动找到 `LeagueClientUx.exe`（选人/房间）或 `League of Legends.exe`（对局中）主窗口，面板始终贴其右侧；窗口铺满屏时浮在工作区右缘（半透明叠层效果）
+- **F9 一键排布**：游戏/客户端窗口缩到左 2/3，面板占右 1/3——两个窗口同时看
+- **F10**：停靠跟随开关（关掉后可自由拖动面板）
+- **Ctrl+Alt+F12**：退出面板；面板内也有 排布/停靠/刷新/关闭 按钮（顶部条按住可拖动窗口）
+- 前端复用同一 `index.html` 的 `?side=1` 窄布局（隐藏工具面板，只留对局监控/好友状态），改页面无需重建壳
+- 服务未启动时面板显示等待页，服务就绪后自动载入
+
+**构建前置**（仅 Windows）：Rust 工具链 + mingw-w64（GNU 工具链需要 `dlltool`）。本机已装：rustup stable-x86_64-pc-windows-gnu + winlibs mingw（`C:\tools\winlibs\mingw64\bin` 已在用户 PATH）。若用 MSVC 工具链则无需 mingw。
+
+开发调试（Web 服务 watch + 壳热重载）：
+
+```
+npm run panel:dev
+```
+
+> ⚠️ 游戏需使用**无边框窗口**模式；全屏独占下任何窗口都无法停靠/悬浮。已知问题：GNU 链接器会提示 `multiple non-default manifests` 警告（tao/WebView2 各嵌一个清单），不影响运行。
 
 零依赖（node:http + 原生前端），默认本机访问；启动时控制台会同时打印**局域网地址**（如 `http://192.168.x.x:8765`），手机连接同一 Wi-Fi 直接打开即可（首次需允许 Windows 防火墙放行 Node.js）。包含 7 个面板：
 

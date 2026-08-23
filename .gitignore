@@ -1,7 +1,14 @@
-node_modules/
+﻿node_modules/
 data/cache.json
 data/snapshots/
-dist/
+/dist/
 build/
 *.log
 .DS_Store
+
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+scripts/icon.png
+
+desktop/dist/*
+!desktop/dist/index.html

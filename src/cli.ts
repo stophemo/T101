@@ -1,7 +1,10 @@
 ﻿#!/usr/bin/env node
 // t101 — 英雄联盟国服 BP 助手
-import { execSync } from 'node:child_process';
+import { execSync, spawn } from 'node:child_process';
 import http from 'node:http';
+import { existsSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { startWebServer } from './web/server.js';
 
 // Windows 下把控制台切到 UTF-8，避免中文乱码
@@ -410,11 +413,54 @@ function isLolaWebRunning(port: number): Promise<boolean> {
   });
 }
 
+/**
+ * 侧边停靠面板（Tauri 壳）：无边框置顶窗口，加载本机 Web 服务，自动贴 LOL 客户端/游戏窗口右侧
+ * 构建：npm run panel:build（产物 desktop/src-tauri/target/release/t101-panel.exe）
+ */
+function panelExePath(): string {
+  const here = dirname(fileURLToPath(import.meta.url));
+  return join(here, '..', 'desktop', 'src-tauri', 'target', 'release', 't101-panel.exe');
+}
+
+function spawnPanel(): ReturnType<typeof spawn> | null {
+  const exe = panelExePath();
+  if (!existsSync(exe)) {
+    println(`⚠️  未找到面板程序：${exe}`);
+    println('   请先构建：npm run panel:build（首次需编译 Rust，约 2~5 分钟）');
+    return null;
+  }
+  const child = spawn(exe, [], { stdio: 'ignore', windowsHide: true });
+  child.on('error', () => println(`⚠️  面板启动失败：${exe}`));
+  return child;
+}
+
+function attachPanelLifecycle(child: ReturnType<typeof spawn>) {
+  const killPanel = () => { try { child.kill(); } catch { /* ignore */ } };
+  process.on('SIGINT', killPanel);
+  process.on('SIGTERM', killPanel);
+  child.on('exit', () => {
+    process.removeListener('SIGINT', killPanel);
+    process.removeListener('SIGTERM', killPanel);
+  });
+}
+
+program
+  .command('panel')
+  .description('启动侧边停靠面板（Tauri 壳窗口；需先 npm run panel:build，面板会自动等待 Web 服务）')
+  .action(() => {
+    const child = spawnPanel();
+    if (child) {
+      println('🪟 T101 侧边面板已启动（F9 一键排布 · F10 停靠开关 · Ctrl+Alt+F12 退出）');
+      attachPanelLifecycle(child);
+    }
+  });
+
 program
   .command('web')
   .description('启动 Web 界面（浏览器打开，含 BP 助手/榜单/加载画面等全部功能）')
   .option('-p, --port <port>', '端口', '8765')
   .option('--no-open', '不自动打开浏览器')
+  .option('--panel', '同时启动侧边停靠面板（替代浏览器窗口，需先 npm run panel:build）')
   .action(async (opts) => {
     const port = Number(opts.port);
     const url = `http://127.0.0.1:${port}`;
@@ -422,6 +468,7 @@ program
     if (await isLolaWebRunning(port)) {
       println(`ℹ️ T101 Web 已在运行: ${url}`);
       println('   直接打开浏览器访问即可，或 Ctrl+C 退出本命令');
+      if (opts.panel) spawnPanel();
       return;
     }
     // watch 模式（npm run web:watch）：代码变更会重启进程，自动开浏览器会不断新增标签页，故跳过
@@ -433,7 +480,13 @@ program
       for (const u of lanList) println(`📱 手机访问（同一 Wi-Fi）: ${u}`);
       if (lanList.length) println('   ⚠️ 已开放局域网访问：同网络设备可查看本机游戏数据，公共 Wi-Fi 请谨慎使用');
       println('   Ctrl+C 停止服务');
-      if (opts.open && !isWatch) {
+      if (opts.panel) {
+        const child = spawnPanel();
+        if (child) {
+          println('🪟 侧边面板已启动（F9 一键排布 · F10 停靠开关 · Ctrl+Alt+F12 退出）');
+          attachPanelLifecycle(child);
+        }
+      } else if (opts.open && !isWatch) {
         try { execSync(`start ${localUrl}`, { stdio: 'ignore', windowsHide: true }); } catch { /* ignore */ }
       }
     });

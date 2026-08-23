@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>T101 · 对局助手</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0f17; color: #d8e0ea;
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    display: grid; place-items: center; -webkit-user-select: none; user-select: none; }
+  .box { text-align: center; padding: 24px; }
+  .spin { width: 22px; height: 22px; margin: 0 auto 16px; border: 2px solid #1e2a3a;
+    border-top-color: #0bc6e3; border-radius: 50%; animation: r 1s linear infinite; }
+  @keyframes r { to { transform: rotate(360deg); } }
+  .logo { color: #c8aa6e; font-size: 20px; font-weight: 700; letter-spacing: 1px; }
+  .logo span { color: #0bc6e3; }
+  .msg { margin-top: 14px; color: #7d8ca3; font-size: 12px; line-height: 1.8; }
+  code { color: #0bc6e3; background: #101826; padding: 1px 6px; border-radius: 4px; font-size: 11px; }
+</style>
+</head>
+<body>
+  <div class="box">
+    <div class="spin"></div>
+    <div class="logo">T101 <span>·</span> 对局助手</div>
+    <div class="msg">正在连接本地服务 127.0.0.1:8765 …<br>请先启动 <code>t101 web</code>（或 <code>npm run web</code>），<br>服务就绪后本面板自动载入</div>
+  </div>
+</body>
+</html>

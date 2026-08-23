@@ -10,12 +10,16 @@
     "t101": "tsx src/cli.ts",
     "web": "tsx src/cli.ts web",
     "web:watch": "tsx watch src/cli.ts web",
+    "panel": "tsx src/cli.ts web --panel",
+    "panel:dev": "node scripts/panel-dev.mjs",
+    "panel:build": "cd desktop && npx tauri build --no-bundle",
     "test": "node --import tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "commander": "^12.1.0"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"
