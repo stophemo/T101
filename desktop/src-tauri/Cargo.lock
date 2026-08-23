@@ -2984,10 +2984,9 @@ dependencies = [
 
 [[package]]
 name = "t101-panel"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "raw-window-handle",
- "serde",
  "tauri",
  "tauri-build",
  "windows",

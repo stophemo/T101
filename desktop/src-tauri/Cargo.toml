@@ -1,6 +1,6 @@
 [package]
 name = "t101-panel"
-version = "0.1.0"
+version = "0.0.1"
 description = "T101 对局助手 · 侧边停靠面板（Tauri 壳）"
 edition = "2021"
 
@@ -9,7 +9,6 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["unstable"] }
-serde = { version = "1", features = ["derive"] }
 windows = { version = "0.61", features = [
   "Win32_Foundation",
   "Win32_Graphics_Gdi",

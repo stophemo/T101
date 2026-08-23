@@ -187,9 +187,8 @@ export async function getMyTierId(): Promise<number | null> {
 
 export interface ChampSelectPlayer {
   summonerId: number;
+  /** 当前玩家选定/锁定的英雄；不代表共享英雄池 */
   championId: number;
-  /** 海克斯大乱斗：该玩家翻开的全部卡（部分客户端字段形态，缺省时用 championId） */
-  championIds?: number[];
   assignedPosition: string;
   cellId: number;
   isBot?: boolean;
@@ -197,8 +196,17 @@ export interface ChampSelectPlayer {
   summonerName?: string;
 }
 
+export interface ChampSelectBenchChampion {
+  /** 海克斯大乱斗共享英雄池中的英雄 */
+  championId: number;
+  /** 客户端标记的优先候选 */
+  isPriority?: boolean;
+}
+
 export interface ChampSelectSession {
   queueId?: number;
+  /** LCU session 的共享候选池；team championId 仅表示玩家当前选择 */
+  benchChampions?: ChampSelectBenchChampion[];
   actions: { actorCellId: number; championId: number; completed: boolean; type: string; isAllyAction: boolean }[][];
   bans: { myTeamBans: number[]; theirTeamBans: number[]; numBans: number };
   myTeam: ChampSelectPlayer[];

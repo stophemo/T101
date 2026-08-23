@@ -39,7 +39,7 @@ const ALL_LANES = ['ALL', 'TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'SUPPORT'] as con
 program
   .name('t101')
   .description('英雄联盟国服 BP 助手（数据源：101.qq.com 官方 + OP.GG 参考）')
-  .version('0.2.0');
+  .version('0.0.1');
 
 program
   .command('pick')
@@ -247,13 +247,13 @@ program
         if (isHex) {
           println('\n🎴 海克斯大乱斗：无 Ban 阶段，翻牌进共享池，全员可选');
           if (a.aramPool.length) {
-            println(`🏊 当前共享池（已翻开 ${a.aramPool.length} 个，按推荐分排序）:`);
+            println(`🏊 当前共享英雄池（${a.aramPool.length} 个，按推荐分排序）:`);
             printTable(
               [{ header: '#', align: 'right' }, { header: '英雄' }, { header: '推荐分', align: 'right' }, { header: '胜率', align: 'right' }, { header: '登场率', align: 'right' }, { header: '推荐海克斯牌' }, { header: '备注' }],
-              a.aramPool.map((h) => [h.rank, h.title, h.score !== null ? String(h.score) : '—', h.winRate !== null ? pct(h.winRate) : '—', h.pickRate !== null ? pct(h.pickRate) : '—', h.bestAugments.slice(0, 2).map((x) => x.name_cn).join('、'), h.isMine ? '🌟 我翻的' : (h.score === null ? '无榜数据' : '')]),
+              a.aramPool.map((h) => [h.rank, h.title, h.score !== null ? String(h.score) : '—', h.winRate !== null ? pct(h.winRate) : '—', h.pickRate !== null ? pct(h.pickRate) : '—', h.bestAugments.slice(0, 2).map((x) => x.name_cn).join('、'), h.score === null ? '无榜数据' : '']),
             );
           } else {
-            println('🎴 队友还在翻牌，翻开的英雄进池后自动刷新');
+            println('🎴 LCU 尚未返回共享英雄池');
           }
           println('🃏 全英雄胜率榜（可参考池外英雄）:');
           printTable(
@@ -458,7 +458,7 @@ program
 program
   .command('web')
   .description('启动 Web 界面（浏览器打开，含 BP 助手/榜单/加载画面等全部功能）')
-  .option('-p, --port <port>', '端口', '8765')
+  .option('-p, --port <port>', '端口', '7892')
   .option('--no-open', '不自动打开浏览器')
   .option('--panel', '同时启动侧边停靠面板（替代浏览器窗口，需先 npm run panel:build）')
   .action(async (opts) => {

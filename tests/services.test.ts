@@ -179,61 +179,29 @@ test('ban 场景 B：无威胁数据时降级为版本梯度榜', () => {
 
 // ---------- 海克斯大乱斗共享池 ----------
 
-test('buildAramPool：双方翻开的卡都进共享池、去重、按胜率排序、标注自己翻的', () => {
-  const myTeam = [
-    { cellId: 1, championId: 7 },   // 我：菲兹
-    { cellId: 2, championId: 6 },   // 队友：盖伦
-    { cellId: 3, championId: 7 },   // 队友也翻到菲兹 -> 去重
-    { cellId: 4, championId: 0 },   // 还没翻
-    { cellId: 5, championId: 0 },   // 还没翻
-  ];
-  // 对面翻开的卡：盲僧(2)、菲兹(7)重复、安妮(1)+亚索(5)（championIds 数组形态）
-  const theirTeam = [
-    { cellId: 101, championId: 2 },
-    { cellId: 102, championId: 7 },
-    { cellId: 103, championId: 0, championIds: [1, 5] },
-    { cellId: 104, championId: 0 },
-    { cellId: 105, championId: 0 },
+test('buildAramPool：只使用 LCU benchChampions，不把队友已选英雄混入共享池', () => {
+  const benchChampions = [
+    { championId: 7 },
+    { championId: 6 },
+    { championId: 7 }, // 重复候选去重
+    { championId: 2 },
+    { championId: 0 },
   ];
   const aramHeroes = [
     { heroId: 6, title: '盖伦', alias: 'Garen', winRate: 49.2, pickRate: 10, rank: 2, bestAugments: [], bestPartners: [] },
     { heroId: 7, title: '菲兹', alias: 'Fizz', winRate: 52.8, pickRate: 8, rank: 1, bestAugments: [], bestPartners: [] },
     { heroId: 2, title: '盲僧', alias: 'LeeSin', winRate: 51, pickRate: 12, rank: 3, bestAugments: [], bestPartners: [] },
   ];
-  const pool = buildAramPool(myTeam, theirTeam, 1, heroes, aramHeroes);
-  assert.equal(pool.length, 5);                    // 我方 2 + 对面 3（菲兹去重）
-  assert.equal(pool[0].heroId, 7);                 // 菲兹 52.8% 综合分最高排第一
-  assert.equal(pool[0].isMine, true);              // 我翻的
-  assert.equal(pool[0].rank, 1);                   // 推荐序号
-  // 综合分：菲兹 (52.8-45)*8=62.4 -> 62.4*0.7 + 8*6*0.3=48*0.3 -> 62.4*0.7+48*0.3=58.08 -> 58
+  const pool = buildAramPool(benchChampions, heroes, aramHeroes);
+  assert.deepEqual(pool.map((p) => p.heroId), [7, 2, 6]);
   assert.equal(pool[0].score, 58);
-  const ids = pool.map((p) => p.heroId);
-  assert.deepEqual([...ids].sort(), [1, 2, 5, 6, 7]);          // 对面卡也进池（安妮/盲僧/亚索）
-  assert.equal(pool.find((p) => p.heroId === 2)?.isMine, false); // 对面翻的不算我的
-  // 排序：盲僧(51%+12%) 应高于盖伦(49.2%+10%)；安妮/亚索无榜数据排最后
-  const idx = (id: number) => ids.indexOf(id);
-  assert.ok(idx(2) < idx(6), '盲僧分高于盖伦');
-  assert.ok(idx(6) < idx(1) && idx(6) < idx(5), '有数据英雄在无数据之前');
-  assert.equal(pool[3].score, null);               // 亚索无榜数据
-  assert.equal(pool[4].score, null);               // 安妮无榜数据（榜外排最后）
 });
 
-test('buildAramPool：榜外英雄补空胜率，未翻牌为空池', () => {
-  const poolEmpty = buildAramPool(
-    [{ cellId: 1, championId: 0 }, { cellId: 2, championId: 0 }],
-    [{ cellId: 101, championId: 0 }],
-    1, heroes, [],
-  );
-  assert.deepEqual(poolEmpty, []);
-  const pool = buildAramPool(
-    [{ cellId: 1, championId: 1 }, { cellId: 2, championId: 0 }],
-    [],
-    1, heroes, [], // 安妮不在榜内
-  );
-  assert.equal(pool.length, 1);
-  assert.equal(pool[0].title, '安妮');
-  assert.equal(pool[0].winRate, null);             // 无榜数据
-  assert.deepEqual(pool[0].bestAugments, []);
+test('buildAramPool：没有 benchChampions 时为空，不回退到玩家已选英雄', () => {
+  const pool = buildAramPool([], heroes, [
+    { heroId: 1, title: '安妮', alias: 'Annie', winRate: 50, pickRate: 5, rank: 1, bestAugments: [], bestPartners: [] },
+  ]);
+  assert.deepEqual(pool, []);
 });
 
 // ---------- 海克斯牌评分 ----------

@@ -3,738 +3,617 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
 <title>T101 · 对局助手</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%230a1428'/%3E%3Cpath d='M16 3.5 28.5 16 16 28.5 3.5 16z' fill='none' stroke='%23c8aa6e' stroke-width='1.6'/%3E%3Ctext x='16' y='20.5' font-size='11' font-weight='800' fill='%23c8aa6e' text-anchor='middle' font-family='Segoe UI'%3E101%3C/text%3E%3C/svg%3E">
 <style>
-  :root {
-    --bg: #0b0f17; --bg2: #101826; --card: #121a26; --card2: #16202f;
-    --border: #1e2a3a; --text: #d8e0ea; --dim: #7d8ca3;
-    --gold: #c8aa6e; --cyan: #0bc6e3; --green: #4ade80; --red: #f87171; --orange: #fbbf24;
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: var(--bg); color: var(--text); font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; min-height: 100vh; }
-  .wrap { max-width: 1100px; margin: 0 auto; padding: 16px 20px 60px; }
+/* ============================================================
+   T101 · 对局助手 — 桌面客户端 UI
+   视觉对齐英雄联盟客户端：深海蓝底 / 黄金描边 / 海克斯科技菱形 / 羊皮纸文字
+   ============================================================ */
+:root {
+  --bg: #010a13;            /* 页面最深层（LOL 客户端底色） */
+  --bg2: #0a1428;           /* 面板海军蓝 */
+  --card: #0d1d31;
+  --card2: #12263c;
+  --panel: #16283d;
+  --border: #1e3349;        /* 面板描边（蓝系） */
+  --border-soft: #15273b;
+  --text: #f0e6d2;          /* 羊皮纸文字 */
+  --dim: #a09b8c;           /* 暗金灰（LOL 次级文字） */
+  --muted: #6f7f8c;
+  --gold: #c8aa6e;          /* LOL 主题金 */
+  --gold-2: #f0e6d2;
+  --cyan: #0ac8b9;          /* 青（我方/强调） */
+  --blue: #0397ab;
+  --green: #39c96b;
+  --red: #e84057;           /* LOL 红（敌方/危险） */
+  --orange: #d8a13a;
+  --shadow: 0 12px 30px rgba(0, 0, 0, .45);
+  --font-h: "Beaufort for LOL", "Microsoft YaHei", "PingFang SC", sans-serif;
+  --font-b: "Spiegel", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+}
 
-  /* header */
-  header { display: flex; align-items: center; gap: 14px; padding: 14px 0 10px; border-bottom: 1px solid var(--border); margin-bottom: 14px; flex-wrap: wrap; }
-  .logo { font-size: 22px; font-weight: 700; color: var(--gold); letter-spacing: 1px; }
-  .logo span { color: var(--cyan); }
-  .spacer { flex: 1; }
-  .status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--dim); }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: #555; }
-  .dot.on { background: var(--green); box-shadow: 0 0 8px var(--green); }
-  .dot.off { background: #555; }
-  .phase-badge { background: var(--card2); border: 1px solid var(--border); padding: 3px 10px; border-radius: 20px; font-size: 12px; color: var(--cyan); }
-  .switch { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); cursor: pointer; user-select: none; }
-  .switch input { accent-color: var(--cyan); }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { height: 100%; }
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(120% 65% at 50% -12%, rgba(14, 42, 74, .5), transparent 62%),
+    repeating-linear-gradient(115deg, rgba(200, 170, 110, .016) 0 1px, transparent 1px 22px),
+    linear-gradient(180deg, #020a14 0%, #010a13 42%, #030d1a 100%);
+  color: var(--text);
+  font-family: var(--font-b);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+button, input, select { font-family: inherit; }
+button { transition: background-color .15s, color .15s, border-color .15s, transform .12s, box-shadow .15s; }
+img { display: block; }
+::selection { background: rgba(10, 200, 185, .28); }
+::-webkit-scrollbar { width: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #1c2f45; border-radius: 5px; border: 2px solid #010a13; }
+::-webkit-scrollbar-thumb:hover { background: #2a4564; }
+::-webkit-scrollbar-corner { background: transparent; }
 
-  /* tabs */
-  nav { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
-  nav button { background: var(--card); color: var(--dim); border: 1px solid var(--border); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; transition: all .15s; }
-  nav button:hover { color: var(--text); border-color: var(--cyan); }
-  nav button.active { background: linear-gradient(180deg, #173042, #12202f); color: var(--cyan); border-color: var(--cyan); font-weight: 600; }
-  section.tab { display: none; }
-  section.tab.active { display: block; animation: fade .2s ease; }
-  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+/* ============ 标题栏（无边框窗口拖拽区，LOL 客户端顶栏语言） ============ */
+.topbar {
+  position: sticky; top: 0; z-index: 60;
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 9px;
+  background: linear-gradient(180deg, rgba(13, 29, 49, .96), rgba(6, 14, 26, .96));
+  border-bottom: 1px solid rgba(200, 170, 110, .26);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, .45);
+  user-select: none; -webkit-user-select: none;
+}
+.topbar::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 2px;
+  background: linear-gradient(90deg, transparent 2%, rgba(200, 170, 110, .55) 32%, rgba(10, 200, 185, .45) 68%, transparent 98%);
+  pointer-events: none;
+}
+.brand { display: flex; align-items: center; gap: 8px; padding: 1px 0; }
+.brand-mark {
+  width: 28px; height: 28px; flex: none;
+  display: grid; place-items: center;
+  background: linear-gradient(160deg, #142a44, #0a1628);
+  border: 1px solid rgba(200, 170, 110, .65);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);   /* 海克斯菱形 */
+  color: var(--gold); font-size: 9.5px; font-weight: 800; letter-spacing: .4px;
+}
+.brand-copy { display: flex; flex-direction: column; line-height: 1.18; min-width: 0; }
+.brand-copy strong { font-family: var(--font-h); font-size: 13px; letter-spacing: .9px; color: #f4ead8; white-space: nowrap; }
+.brand-copy span { font-size: 8.5px; letter-spacing: 1.6px; color: var(--dim); text-transform: uppercase; white-space: nowrap; }
+.brand-copy span { display: none; }   /* 窄窗省略副标题 */
 
-  /* cards */
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
-  .card h3 { font-size: 15px; color: var(--gold); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
-  .card h3 .hint { font-size: 12px; color: var(--dim); font-weight: 400; }
-  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-  input[type=text], select {
-    background: var(--bg2); border: 1px solid var(--border); color: var(--text);
-    padding: 9px 12px; border-radius: 8px; font-size: 14px; outline: none;
-  }
-  input[type=text]:focus, select:focus { border-color: var(--cyan); }
-  input[type=text] { width: 280px; }
-  button.primary { background: linear-gradient(180deg, #1aa7c0, #0e7f96); color: #fff; border: none; padding: 9px 22px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; }
-  button.primary:hover { filter: brightness(1.1); }
-  button.primary:disabled { opacity: .5; cursor: wait; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 7px; min-width: 0; }
+.status {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  font-size: 11px; color: var(--dim); white-space: nowrap;
+}
+.status-label { display: none; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: #3c4a5a; flex: none; transition: background .2s, box-shadow .2s; }
+.dot.on { background: var(--green); box-shadow: 0 0 7px rgba(57, 201, 107, .85); }
+.dot.off { background: #465263; }
+#lcuText {
+  min-width: 0; max-width: 92px; flex-shrink: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.phase-badge {
+  flex: none;
+  display: inline-flex; align-items: center;
+  padding: 3px 8px; font-size: 10px; font-weight: 700; letter-spacing: .8px;
+  color: var(--gold); background: rgba(200, 170, 110, .09);
+  border: 1px solid rgba(200, 170, 110, .42); border-radius: 2px;
+  white-space: nowrap;
+}
+.switch { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--dim); cursor: pointer; user-select: none; flex: none; }
+.switch input { position: absolute; opacity: 0; pointer-events: none; }
+.switch-track {
+  position: relative; width: 26px; height: 14px; border-radius: 8px;
+  background: #24354a; transition: background .18s;
+}
+.switch-track::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #aeb9c4; box-shadow: 0 1px 2px rgba(0, 0, 0, .4);
+  transition: left .18s, background .18s;
+}
+.switch input:checked + .switch-track { background: rgba(10, 200, 185, .5); }
+.switch input:checked + .switch-track::after { left: 14px; background: #e2fffc; }
+.switch span:not(.switch-track) { display: none; }   /* 窄窗仅显示开关 */
 
-  /* hero chips */
-  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
-  .chip { display: flex; align-items: center; gap: 7px; background: var(--card2); border: 1px solid var(--border); border-radius: 24px; padding: 4px 12px 4px 4px; font-size: 13px; }
-  .chip img { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--border); }
-  .chip.red { border-color: rgba(248,113,113,.4); }
-  .chip.blue { border-color: rgba(11,198,227,.4); }
+.panel-tools { display: flex; gap: 3px; flex: none; }
+.panel-tools button {
+  min-width: 25px; height: 25px; padding: 0 5px;
+  display: grid; place-items: center; gap: 3px;
+  background: rgba(255, 255, 255, .035);
+  border: 1px solid rgba(160, 155, 140, .3); border-radius: 2px;
+  color: var(--dim); font-size: 11px; line-height: 1; cursor: pointer;
+}
+.panel-tools button:hover { border-color: rgba(200, 170, 110, .65); color: var(--gold); background: rgba(200, 170, 110, .09); }
+.panel-tools button:active { transform: translateY(1px); }
+.panel-tools .bt { display: none; }
+.panel-tools #panelDock.on { border-color: rgba(10, 200, 185, .6); color: #7fe8dd; background: rgba(10, 200, 185, .1); }
+.panel-tools #panelClose:hover { border-color: rgba(232, 64, 87, .65); color: var(--red); background: rgba(232, 64, 87, .1); }
 
-  /* 选人棋盘（5v5 楼序） */
-  .board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
-  .slot { background: var(--card2); border: 1px solid var(--border); border-radius: 10px; padding: 10px; text-align: center; position: relative; transition: border-color .12s, box-shadow .12s; }
-  .slot.acting { border-color: var(--gold); box-shadow: 0 0 12px rgba(251,191,36,.35); }
-  .slot.me { border-color: rgba(11,198,227,.55); }
-  .slot.sel { border-color: var(--gold); box-shadow: 0 0 12px rgba(251,191,36,.45); }
-  .slot img { width: 40px; height: 40px; border-radius: 10px; }
-  .slot .nm { font-size: 12px; margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .slot .ln { font-size: 11px; color: var(--muted); margin-top: 2px; }
-  .slot .tag { position: absolute; top: 4px; right: 4px; background: var(--gold); color: #1a1205; font-size: 10px; padding: 1px 6px; border-radius: 8px; }
-  /* 海斗翻牌卡背 */
-  .slot .cardback { width: 40px; height: 40px; margin: 0 auto; border-radius: 10px; background: linear-gradient(135deg, #3b2a10, #1f1608); border: 2px solid var(--gold); display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--gold); box-shadow: 0 0 8px rgba(251,191,36,.25); }
-  .slot.flipped img { box-shadow: 0 0 10px rgba(251,191,36,.55); border: 2px solid rgba(251,191,36,.5); }
+/* 窗口加宽后恢复文字 */
+@media (min-width: 620px) {
+  .brand-copy span { display: block; }
+  .status-label { display: inline; }
+  .switch span:not(.switch-track) { display: inline; }
+  .panel-tools .bt { display: inline; }
+  .panel-tools .gi { display: none; }
+  #lcuText { max-width: 160px; }
+}
 
-  /* 对局主视图：状态栏 + 流程指示条 */
-  .stage-top { background: var(--card2); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; margin-bottom: 12px; }
-  .st-timer { font-size: 26px; font-weight: 800; color: var(--gold); font-variant-numeric: tabular-nums; letter-spacing: 1px; }
-  .st-timer.warn { color: var(--red); animation: blink 1s ease-in-out infinite; }
-  @keyframes blink { 50% { opacity: .45; } }
-  .flow { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-  .flow .fp { font-size: 12px; color: var(--dim); border: 1px solid var(--border); border-radius: 14px; padding: 3px 12px; background: rgba(255,255,255,.02); }
-  .flow .fp.cur { color: var(--gold); border-color: var(--gold); box-shadow: 0 0 8px rgba(251,191,36,.25); font-weight: 700; }
-  .flow .fp.done { color: var(--cyan); border-color: rgba(11,198,227,.4); }
-  .flow i { color: var(--dim); font-style: normal; font-size: 13px; }
+/* ============ 布局 ============ */
+.wrap { padding: 12px 12px 52px; }
+section.tab { display: none; }
+section.tab.active { display: block; animation: fade .2s ease; }
+@keyframes fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
-  /* 禁用棋盘：蓝 5 + 红 5 大槽位 */
-  .ban-board { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 760px) { .ban-board { grid-template-columns: 1fr; } }
-  .ban-side { background: rgba(255,255,255,.015); border: 1px solid var(--border); border-radius: 10px; padding: 10px; }
-  .ban-slots { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
-  .ban-slot { aspect-ratio: 3/4; border: 2px dashed var(--border); border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; position: relative; background: rgba(0,0,0,.18); }
-  .ban-slot.filled { border-style: solid; border-color: rgba(248,113,113,.45); }
-  .ban-slot img { width: 46px; height: 46px; border-radius: 10px; }
-  .ban-slot .nm { font-size: 11px; color: var(--text); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ban-slot .order { position: absolute; top: 4px; left: 6px; font-size: 10px; color: var(--dim); }
+/* ============ 面板标题 ============ */
+.stage-panel h3, .subpanel h3 {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  margin-bottom: 11px; padding-bottom: 7px;
+  border-bottom: 1px solid rgba(200, 170, 110, .16);
+  font-family: var(--font-h);
+  font-size: 12.5px; font-weight: 700; letter-spacing: 1.1px;
+  color: var(--gold); text-transform: uppercase;
+}
+.stage-panel h3 .hint, .subpanel h3 .hint {
+  font-family: var(--font-b); font-size: 10.5px; font-weight: 400;
+  letter-spacing: .2px; color: var(--dim); text-transform: none;
+}
 
-  /* 逐场战绩明细 */
-  .recent-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
-  .mini { font-size: 11px; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--border); background: rgba(255,255,255,.03); color: var(--dim); cursor: pointer; vertical-align: 1px; }
-  .mini:hover { color: var(--cyan); border-color: rgba(11,198,227,.4); }
-  .type-eval { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; padding: 7px 10px; border-radius: 8px; background: rgba(255,255,255,.03); font-size: 12px; line-height: 1.6; }
-  .recent-row { border-radius: 8px; background: rgba(255,255,255,.02); border-left: 3px solid var(--dim); font-size: 12px; }
-  .recent-row.win { border-left-color: var(--green); }
-  .recent-row.lose { border-left-color: var(--red); }
-  .recent-row .recent-summary { display: grid; grid-template-columns: 74px 76px 34px 1fr 72px 52px 44px 16px; gap: 8px; align-items: center; padding: 5px 10px; cursor: pointer; list-style: none; }
-  .recent-row .recent-summary::-webkit-details-marker { display: none; }
-  .recent-row .recent-summary::after { content: '▸'; color: var(--dim); justify-self: end; transition: transform .15s; }
-  .recent-row[open] .recent-summary::after { content: '▾'; }
-  .recent-row .ri { width: 26px; height: 26px; border-radius: 6px; }
-  .recent-row .rt { color: var(--dim); font-variant-numeric: tabular-nums; }
-  .recent-row .rm { color: var(--dim); font-size: 11px; }
-  .recent-row .rk { font-variant-numeric: tabular-nums; text-align: right; }
-  .recent-row .rd { color: var(--dim); text-align: right; }
-  .recent-row .rr { font-weight: 700; text-align: right; }
-  .recent-row.win .rr { color: var(--green); }
-  .recent-row.lose .rr { color: var(--red); }
-  /* 战绩展开详情 */
-  .recent-detail { padding: 8px 10px 10px; border-top: 1px dashed var(--border); margin: 0 10px 0 34px; }
-  .recent-detail .rd-line { font-size: 11px; color: var(--dim); line-height: 1.7; }
-  .recent-detail .rd-items { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
-  .recent-detail .item-ic { width: 26px; height: 26px; border-radius: 4px; border: 1px solid var(--border); background: rgba(255,255,255,.04); }
-  /* 完整对局 10 人（仅自己的对局） */
-  .mp-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
-  .mp-side { border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
-  .mp-side.blue { border-color: rgba(11,198,227,.35); }
-  .mp-side.red { border-color: rgba(248,113,113,.35); }
-  .mp-label { font-size: 11px; color: var(--dim); font-weight: 700; margin-bottom: 6px; }
-  .mp-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; }
-  .mp-row.self { outline: 1px solid var(--gold); background: rgba(214,163,93,.08); }
-  .mp-ic { width: 26px; height: 26px; border-radius: 6px; flex: none; }
-  .mp-info { flex: 1; min-width: 0; }
-  .mp-name { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .mp-me { color: var(--gold); font-size: 10px; border: 1px solid var(--gold); border-radius: 4px; padding: 0 4px; margin-left: 2px; }
-  .mp-sub { font-size: 10px; color: var(--dim); }
-  .mp-items { display: flex; gap: 2px; flex: none; }
-  .mp-items img { width: 18px; height: 18px; border-radius: 3px; border: 1px solid var(--border); background: rgba(255,255,255,.04); }
-  @media (max-width: 680px) { .mp-wrap { grid-template-columns: 1fr; } }
+/* ============ 对局主视图：状态栏 + 流程指示条 ============ */
+.stage-top {
+  position: relative;
+  margin-bottom: 12px; padding: 13px 14px 12px;
+  background:
+    repeating-linear-gradient(115deg, transparent 0 26px, rgba(255, 255, 255, .012) 26px 27px),
+    linear-gradient(180deg, #0e2138, #0a1628);
+  border: 1px solid rgba(200, 170, 110, .22);
+  border-top: 2px solid rgba(200, 170, 110, .6);
+  border-radius: 3px;
+  box-shadow: var(--shadow);
+}
+.stage-top .phase-badge { background: rgba(200, 170, 110, .08); }
+.stage-top .sub { color: #9aabb5; }
+.st-timer {
+  font-size: 26px; font-weight: 800; color: var(--gold);
+  font-variant-numeric: tabular-nums; letter-spacing: .5px; line-height: 1.1;
+  text-shadow: 0 0 16px rgba(200, 170, 110, .35);
+}
+.st-timer.warn { color: var(--red); text-shadow: 0 0 16px rgba(232, 64, 87, .55); animation: blink 1s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: .45; } }
 
-  /* 好友卡片：头部信息 + 排位/海斗双列状态块 + 底部总结 */
-  #frList { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
-  .fr-card { background: var(--card2); border: 1px solid var(--border); border-radius: 12px; padding: 12px 12px 10px; position: relative; transition: border-color .2s, box-shadow .2s; }
-  .fr-card.good { border-color: rgba(74,222,128,.45); }
-  .fr-card.mid { border-color: rgba(251,191,36,.35); }
-  .fr-card.bad { border-color: rgba(248,113,113,.4); }
-  .fr-card.sel { box-shadow: 0 0 0 3px rgba(67,199,209,.12); border-color: var(--cyan); }
-  .fr-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-  .fr-head .avatar { width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--border); flex: none; margin: 0; }
-  .fr-info { flex: 1; min-width: 0; text-align: left; }
-  .fr-info .nm { font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .fr-line { margin-top: 2px; }
-  .fr-card .st { display: inline-block; font-size: 10px; padding: 1px 7px; border-radius: 10px; border: 1px solid currentColor; background: rgba(255,255,255,.03); }
-  .fr-status-chat { color: var(--green); } .fr-status-away { color: var(--gold); } .fr-status-mobile { color: var(--cyan); } .fr-status-dnd { color: var(--red); }
-  .fr-status-in_game { color: var(--cyan); border-color: rgba(11,198,227,.5) !important; background: rgba(11,198,227,.08) !important; }
-  .fr-status-in_queue { color: var(--gold); }
-  .fr-tier { font-size: 11px; color: var(--dim); }
-  .mode-stat { background: rgba(255,255,255,.03); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; text-align: left; }
-  .mode-stat .ms-title { display: flex; justify-content: space-between; font-size: 11px; color: var(--dim); margin-bottom: 3px; }
-  .mode-stat .ms-win { font-size: 21px; font-weight: 800; line-height: 1.1; }
-  .mode-stat .ms-sub { font-size: 11px; color: var(--dim); margin-top: 2px; }
-  .mode-stat .ms-tag { display: inline-block; margin-top: 6px; font-size: 10px; padding: 1px 7px; border-radius: 3px; font-weight: 700; }
-  .ms-tag.tag-good { color: #052e16; background: #4ade80; }
-  .ms-tag.tag-mid { color: #451a03; background: #fbbf24; }
-  .ms-tag.tag-bad { color: #fff; background: #ef4444; }
+/* 流程条：海克斯菱形节点 + 连接线 */
+.flow { display: flex; margin-top: 13px; }
+.flow i { display: none; }
+.flow .fp {
+  flex: 1; position: relative; min-width: 0;
+  padding: 16px 2px 0; text-align: center;
+  font-size: 10px; letter-spacing: .7px; color: var(--muted);
+  white-space: nowrap; transition: color .2s;
+}
+.flow .fp::before {
+  content: ''; position: absolute; top: 0; left: 50%;
+  width: 9px; height: 9px; transform: translateX(-50%) rotate(45deg);
+  background: #0a1628; border: 1px solid #2c4158;
+  transition: background .2s, border-color .2s, box-shadow .2s;
+}
+.flow .fp::after {
+  content: ''; position: absolute; top: 4px; left: calc(50% + 7px);
+  width: calc(100% - 14px); height: 1px; background: #1c2f45;
+}
+.flow .fp:last-child::after { display: none; }
+.flow .fp.done { color: #7fc9c4; }
+.flow .fp.done::before { border-color: var(--cyan); background: rgba(10, 200, 185, .9); box-shadow: 0 0 7px rgba(10, 200, 185, .5); }
+.flow .fp.done::after { background: rgba(10, 200, 185, .38); }
+.flow .fp.cur { color: var(--gold); font-weight: 700; }
+.flow .fp.cur::before { border-color: var(--gold); background: var(--gold); box-shadow: 0 0 9px rgba(200, 170, 110, .7); }
+.flow .fp.cur::after { background: rgba(200, 170, 110, .4); }
 
-  /* 选人轮次条：B1B2→R1R2R3→B3B4→R4R5→B5 */
-  .rounds { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-  .round { font-size: 12px; color: var(--dim); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; background: rgba(255,255,255,.02); }
-  .round.blue { color: var(--cyan); border-color: rgba(11,198,227,.35); }
-  .round.red { color: var(--red); border-color: rgba(248,113,113,.35); }
-  .round.cur { color: var(--gold); border-color: var(--gold); box-shadow: 0 0 8px rgba(251,191,36,.3); font-weight: 700; }
-  .round.done { opacity: .45; text-decoration: line-through; }
+/* ============ 输入与按钮（LOL 斜切描边风格） ============ */
+button {
+  min-height: 32px; padding: 6px 12px;
+  background: linear-gradient(180deg, #172c44, #0e1d30);
+  border: 1px solid rgba(160, 155, 140, .38); border-radius: 2px;
+  color: var(--dim); font-size: 12.5px; cursor: pointer;
+}
+button:hover { border-color: rgba(200, 170, 110, .7); color: var(--gold); background: linear-gradient(180deg, #1d3650, #132840); }
+button:active { transform: translateY(1px); }
+.mini {
+  font-size: 10px; padding: 1px 8px; border-radius: 2px;
+  border: 1px solid var(--border); background: rgba(255, 255, 255, .03);
+  color: var(--dim); cursor: pointer; vertical-align: 1px; min-height: 0;
+}
+.mini:hover { color: var(--cyan); border-color: rgba(10, 200, 185, .5); }
 
-  /* 加载进度条 */
-  .load-progress { height: 10px; border-radius: 6px; background: rgba(255,255,255,.06); border: 1px solid var(--border); overflow: hidden; margin-bottom: 14px; }
-  .load-bar { height: 100%; width: 0; border-radius: 6px; background: linear-gradient(90deg, var(--cyan), var(--gold)); animation: loadfill 1.4s ease-in-out infinite; }
-  @keyframes loadfill { 0% { width: 5%; } 50% { width: 65%; } 100% { width: 5%; } }
+/* ============ 英雄头像通用描边 ============ */
+.chip img, .hero-card img, .slot img, .ban-slot img, .mp-ic, .recent-row .ri {
+  border: 1px solid rgba(200, 170, 110, .34);
+}
 
-  /* recommendation cards */
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
-  .hero-card { background: var(--card2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: center; position: relative; transition: transform .12s, border-color .12s; }
-  .hero-card:hover { transform: translateY(-2px); border-color: var(--cyan); }
-  .hero-card img { width: 64px; height: 64px; border-radius: 12px; margin-bottom: 8px; }
-  .hero-card .name { font-size: 14px; font-weight: 600; }
-  .hero-card .lane { font-size: 11px; color: var(--dim); margin-top: 2px; }
-  .hero-card .win { font-size: 15px; font-weight: 700; margin-top: 4px; }
-  .hero-card .counters { font-size: 11px; color: var(--dim); margin-top: 5px; line-height: 1.5; }
-  .hero-card .rank { position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,.5); font-size: 11px; padding: 1px 7px; border-radius: 10px; color: var(--dim); }
-  .tier-badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 4px; margin-top: 5px; }
-  .t0 { background: rgba(248,113,113,.18); color: var(--red); }
-  .t1 { background: rgba(200,170,110,.18); color: var(--gold); }
-  .t2 { background: rgba(11,198,227,.15); color: var(--cyan); }
-  .t3 { background: rgba(125,140,163,.15); color: var(--dim); }
-  .t4 { background: rgba(125,140,163,.08); color: #56637a; }
+/* ============ 选人棋盘（5v5 楼序，蓝上红下） ============ */
+.board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+#stMyBoard, #stEnemyBoard { margin-top: 12px; }
+#stMyBoard::before, #stEnemyBoard::before {
+  grid-column: 1 / -1;
+  font-size: 10px; font-weight: 700; letter-spacing: 1.6px; margin-bottom: 3px;
+}
+#stMyBoard::before { content: '我方阵容'; color: #7fd4ce; }
+#stEnemyBoard { margin-top: 15px; padding-top: 11px; border-top: 1px dashed rgba(160, 155, 140, .22); }
+#stEnemyBoard::before { content: '对方阵容'; color: #f08793; }
+.slot {
+  position: relative; min-width: 0; text-align: center;
+  background: rgba(255, 255, 255, .025);
+  border: 1px solid rgba(160, 155, 140, .22); border-radius: 3px;
+  padding: 8px 3px 7px;
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+#stMyBoard .slot { border-color: rgba(10, 200, 185, .26); }
+#stEnemyBoard .slot { border-color: rgba(232, 64, 87, .26); }
+.slot img { width: 40px; height: 40px; margin: 0 auto; border-radius: 3px; object-fit: cover; }
+.slot .nm {
+  margin-top: 6px; font-size: 10.5px; color: #e8e0cf;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.slot .ln { margin-top: 1px; font-size: 9.5px; color: var(--muted); }
+.slot.me { border-color: rgba(3, 151, 171, .65); background: rgba(3, 151, 171, .08); }
+.slot.sel { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(200, 170, 110, .2); }
+.slot.acting { border-color: var(--gold); animation: actingPulse 1.3s ease-in-out infinite; }
+@keyframes actingPulse {
+  0%, 100% { box-shadow: 0 0 11px rgba(200, 170, 110, .32); }
+  50% { box-shadow: 0 0 3px rgba(200, 170, 110, .14); }
+}
+.slot .tag {
+  position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
+  background: var(--gold); color: #241a08;
+  font-size: 9px; font-weight: 700; letter-spacing: .4px;
+  padding: 1px 6px; border-radius: 1px; white-space: nowrap;
+}
+.slot .cardback {
+  width: 40px; height: 40px; margin: 0 auto;
+  border-radius: 3px; border: 1px solid rgba(200, 170, 110, .55);
+  background: linear-gradient(135deg, #16283d, #0a1428);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; color: var(--gold);
+}
+.slot.flipped img { border-color: var(--gold); box-shadow: 0 0 8px rgba(200, 170, 110, .42); }
 
-  .win-hi { color: var(--green); } .win-lo { color: var(--red); } .win-mid { color: var(--text); }
+/* ============ 禁用棋盘：蓝 5 + 红 5 ============ */
+.ban-board { display: grid; grid-template-columns: 1fr; gap: 10px; }
+@media (min-width: 620px) { .ban-board { grid-template-columns: 1fr 1fr; } }
+.ban-side {
+  background: rgba(255, 255, 255, .02);
+  border: 1px solid var(--border); border-radius: 3px; padding: 9px;
+}
+.ban-side:first-child { border-color: rgba(10, 200, 185, .3); }
+.ban-side:last-child { border-color: rgba(232, 64, 87, .3); }
+.ban-slots { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+.ban-slot {
+  aspect-ratio: 3/4; position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  border: 1px dashed rgba(160, 155, 140, .32); border-radius: 3px;
+  background: rgba(0, 0, 0, .28);
+}
+.ban-slot.filled { border: 1px solid rgba(232, 64, 87, .52); background: rgba(232, 64, 87, .07); }
+.ban-slot img { width: 42px; height: 42px; border-radius: 3px; object-fit: cover; }
+.ban-slot .nm {
+  font-size: 10px; color: #e8e0cf;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ban-slot .order {
+  position: absolute; top: 3px; left: 5px;
+  font-size: 9px; color: var(--muted); font-variant-numeric: tabular-nums;
+}
 
-  /* table */
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { text-align: left; color: var(--dim); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 12px; }
-  td { padding: 8px 10px; border-bottom: 1px solid rgba(30,42,58,.5); }
-  tr:hover td { background: rgba(11,198,227,.04); }
-  td.hero { display: flex; align-items: center; gap: 8px; }
-  td.hero img { width: 30px; height: 30px; border-radius: 6px; }
-  .num { text-align: right; font-variant-numeric: tabular-nums; }
-  .team-header { font-size: 14px; font-weight: 700; margin: 12px 0 6px; display: flex; align-items: center; gap: 8px; }
-  .team-header.blue { color: var(--cyan); } .team-header.red { color: var(--red); }
+/* ============ 选人轮次条 ============ */
+.rounds { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+.round {
+  font-size: 11px; letter-spacing: .5px;
+  border: 1px solid var(--border); border-radius: 2px;
+  padding: 3px 8px; color: var(--muted); background: rgba(255, 255, 255, .02);
+}
+.round.blue { color: #7fd4ce; border-color: rgba(10, 200, 185, .42); }
+.round.red { color: #f08793; border-color: rgba(232, 64, 87, .42); }
+.round.cur { color: #241a08; background: var(--gold); border-color: var(--gold); font-weight: 700; box-shadow: 0 0 10px rgba(200, 170, 110, .35); }
+.round.done { opacity: .38; text-decoration: line-through; }
 
-  .msg { padding: 18px; text-align: center; color: var(--dim); font-size: 14px; border: 1px dashed var(--border); border-radius: 10px; }
-  .err { color: var(--red); font-size: 13px; margin-top: 8px; }
-  .sub { font-size: 12px; color: var(--dim); }
-  .hidden { display: none !important; }
-  .loading-spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--cyan); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .badge-ban { font-size: 11px; color: var(--red); border: 1px solid rgba(248,113,113,.35); padding: 1px 8px; border-radius: 10px; }
-  .aug-card { background: var(--card2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; position: relative; }
-  .aug-card .icon { width: 44px; height: 44px; border-radius: 10px; margin-bottom: 8px; object-fit: cover; }
-  .aug-card .name { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
-  .aug-card .sub2 { font-size: 11px; color: var(--dim); margin-top: 4px; line-height: 1.5; }
-  .aug-card .heroes { font-size: 11px; color: var(--cyan); margin-top: 6px; }
-  .aug-card .win { font-size: 14px; font-weight: 700; margin-top: 4px; }
-  .lv-silver { color: #aeb9c8; } .lv-gold { color: var(--gold); } .lv-prismatic { color: #e879f9; }
-  .rank-tag { position: absolute; top: 8px; right: 8px; font-size: 11px; color: var(--dim); background: rgba(0,0,0,.4); padding: 1px 7px; border-radius: 10px; }
-  /* ---------- T101 workspace redesign ---------- */
-  :root {
-    --bg: #f3f5f7;
-    --bg2: #ffffff;
-    --card: #ffffff;
-    --card2: #f8fafb;
-    --border: #e1e6eb;
-    --text: #17202b;
-    --dim: #71808d;
-    --muted: #8b98a4;
-    --gold: #b86b31;
-    --cyan: #147d80;
-    --green: #287d58;
-    --red: #c45555;
-    --orange: #c98424;
-    --shadow: 0 10px 26px rgba(22, 33, 44, .055);
-    --sidebar: #18252d;
-    --sidebar-muted: #92a1a8;
-  }
-  html { background: var(--bg); }
-  body { background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.45; }
-  button, input, select { font-family: inherit; }
-  button { transition: background-color .15s, color .15s, border-color .15s, transform .15s, box-shadow .15s; }
-  .app-shell { min-height: 100vh; display: flex; }
-  .sidebar { position: fixed; inset: 0 auto 0 0; width: 248px; padding: 28px 18px 22px; display: flex; flex-direction: column; background: var(--sidebar); color: #f4f7f8; z-index: 5; }
-  .brand { display: flex; align-items: center; gap: 11px; padding: 0 10px 34px; }
-  .brand-mark { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid rgba(218, 177, 121, .72); color: #e8c08a; font-size: 11px; font-weight: 800; letter-spacing: 1px; }
-  .brand-copy { display: flex; flex-direction: column; gap: 1px; }
-  .brand-copy strong { font-size: 16px; letter-spacing: .6px; }
-  .brand-copy span { color: var(--sidebar-muted); font-size: 11px; }
-  .side-label { padding: 0 12px 9px; color: #6f818b; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; }
-  .side-label-tools { margin-top: 25px; }
-  #tabs, .tool-nav { display: flex; flex-direction: column; gap: 3px; margin: 0; }
-  #tabs button, .tool-nav button { width: 100%; display: flex; align-items: center; gap: 11px; min-height: 42px; padding: 9px 11px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--sidebar-muted); text-align: left; font-size: 13px; cursor: pointer; }
-  #tabs button:hover, .tool-nav button:hover { background: rgba(255,255,255,.055); color: #fff; }
-  #tabs button.active, .tool-nav button.active { background: #263842; border-color: #344e58; color: #f7fafb; box-shadow: inset 3px 0 0 #d49a55; }
-  .nav-icon { width: 20px; color: #a9b7bc; font-size: 17px; line-height: 1; text-align: center; }
-  #tabs button.active .nav-icon, .tool-nav button.active .nav-icon { color: #e1ae6b; }
-  .nav-arrow { margin-left: auto; color: #60747d; font-size: 20px; line-height: 1; }
-  button.active .nav-arrow { color: #d49a55; }
-  .side-footer { margin-top: auto; padding: 15px 12px 0; border-top: 1px solid rgba(255,255,255,.09); }
-  .side-footer-kicker { color: #71858e; font-size: 9px; letter-spacing: 1.3px; }
-  .side-footer-title { margin-top: 5px; color: #e4edef; font-size: 12px; }
-  .side-footer-copy { margin-top: 3px; color: #7e919a; font-size: 11px; line-height: 1.55; }
-  .app-main { min-width: 0; width: calc(100% - 248px); margin-left: 248px; }
-  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 42px 64px; }
-  header { min-height: 98px; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 27px 0 22px; margin-bottom: 25px; border-bottom: 1px solid var(--border); }
-  .page-heading { min-width: 0; }
-  .kicker { color: var(--cyan); font-size: 10px; font-weight: 700; letter-spacing: 1.45px; text-transform: uppercase; }
-  .kicker span { padding: 0 5px; color: #adb8be; }
-  .page-heading h1 { margin-top: 3px; color: var(--text); font-size: 25px; font-weight: 750; letter-spacing: -.25px; }
-  .page-heading p { margin-top: 2px; color: var(--dim); font-size: 12px; }
-  .topbar-controls { display: flex; align-items: center; justify-content: flex-end; gap: 13px; flex-wrap: wrap; }
-  .status { display: flex; align-items: center; gap: 7px; color: var(--dim); font-size: 12px; white-space: nowrap; }
-  .status-label { color: #9aa5ad; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: #a7b0b7; }
-  .dot.on { background: var(--green); box-shadow: 0 0 0 3px rgba(40,125,88,.12); }
-  .dot.off { background: #a7b0b7; box-shadow: 0 0 0 3px rgba(167,176,183,.12); }
-  .phase-badge { background: #edf6f5; border: 1px solid #c7e1de; padding: 5px 10px; border-radius: 4px; color: var(--cyan); font-size: 11px; font-weight: 650; white-space: nowrap; }
-  .switch { display: flex; align-items: center; gap: 7px; color: var(--dim); cursor: pointer; user-select: none; font-size: 12px; }
-  .switch input { position: absolute; opacity: 0; pointer-events: none; }
-  .switch-track { position: relative; width: 28px; height: 16px; border-radius: 10px; background: #cbd3d8; }
-  .switch-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 10px; height: 10px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.18); transition: left .15s; }
-  .switch input:checked + .switch-track { background: var(--cyan); }
-  .switch input:checked + .switch-track::after { left: 15px; }
-  section.tab { display: none; }
-  section.tab.active { display: block; animation: fade .18s ease; }
-  @keyframes fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 21px; margin-bottom: 16px; box-shadow: var(--shadow); }
-  .card h3 { min-height: 22px; margin-bottom: 15px; color: var(--text); font-size: 15px; font-weight: 700; letter-spacing: 0; }
-  .card h3 .hint { color: var(--dim); font-size: 12px; font-weight: 400; }
-  .card .card { margin: 18px 0 0; padding: 18px 0 0; background: transparent; border: 0; border-top: 1px solid var(--border); border-radius: 0; box-shadow: none; }
-  .row { gap: 9px; }
-  input[type=text], select { min-height: 38px; padding: 8px 11px; border: 1px solid #d8e0e5; border-radius: 4px; background: #fbfcfc; color: var(--text); font-size: 13px; outline: none; }
-  input[type=text] { width: 290px; }
-  input[type=text]::placeholder { color: #9aa5ad; }
-  input[type=text]:focus, select:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(20,125,128,.1); }
-  button { min-height: 34px; border: 1px solid #d4dde1; border-radius: 4px; background: #fff; color: #51616b; padding: 7px 12px; cursor: pointer; font-size: 13px; }
-  button:hover { border-color: #9ebbbe; color: var(--cyan); background: #f5faf9; }
-  button.primary { min-height: 38px; padding: 8px 18px; border: 1px solid #126d70; border-radius: 4px; background: var(--cyan); color: #fff; font-weight: 700; }
-  button.primary:hover { background: #0d686b; filter: none; }
-  button.primary:disabled { opacity: .55; cursor: wait; }
-  .stage-top { position: relative; background: var(--sidebar); border: 0; border-radius: 6px; padding: 19px 22px 17px; margin-bottom: 16px; color: #edf4f4; box-shadow: 0 10px 24px rgba(24,37,45,.12); }
-  .stage-top .phase-badge { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.18); color: #e2b879; }
-  .stage-top .sub { color: #9eb0b7; }
-  .st-timer { font-size: 28px; color: #e3b675; letter-spacing: .5px; }
-  .st-timer.warn { color: #ed8c7b; }
-  .flow { gap: 7px; margin-top: 15px; }
-  .flow .fp { padding: 5px 11px; border: 1px solid rgba(255,255,255,.15); border-radius: 4px; background: rgba(255,255,255,.035); color: #8ea1a9; font-size: 11px; }
-  .flow .fp.cur { border-color: #d49a55; background: rgba(212,154,85,.12); color: #edc68f; box-shadow: none; }
-  .flow .fp.done { border-color: rgba(116,190,178,.4); color: #87c2ba; }
-  .flow i { color: #60737a; }
-  .msg { padding: 20px; border: 1px dashed #d6dfe3; border-radius: 5px; background: #fbfcfc; color: var(--dim); font-size: 13px; }
-  .sub { color: var(--dim); font-size: 12px; }
-  .err { color: var(--red); font-size: 12px; }
-  .hidden { display: none !important; }
-  .loading-spin { border-color: #dce4e6; border-top-color: var(--cyan); }
-  .board { gap: 9px; }
-  .slot { min-width: 0; background: #fbfcfc; border: 1px solid #e1e7ea; border-radius: 5px; padding: 13px 9px; }
-  .slot.acting { border-color: #d49a55; box-shadow: 0 0 0 3px rgba(212,154,85,.1); }
-  .slot.me { border-color: #85bdbc; background: #f5fbfa; }
-  .slot.sel { border-color: #d49a55; box-shadow: 0 0 0 3px rgba(212,154,85,.11); }
-  .slot img { width: 44px; height: 44px; border-radius: 5px; object-fit: cover; }
-  .slot .nm { margin-top: 8px; color: var(--text); }
-  .slot .ln { color: var(--dim); }
-  .slot .tag { top: 6px; right: 6px; background: #e0ad6d !important; color: #3d2815 !important; border-radius: 3px; }
-  .slot .cardback { background: #eff1ee; border-color: #d4a263; color: #bd7e3b; box-shadow: none; }
-  .slot.flipped img { border-color: #d4a263; box-shadow: 0 0 0 3px rgba(212,154,85,.12); }
-  .ban-board { gap: 12px; }
-  .ban-side { background: #fbfcfc; border: 1px solid var(--border); border-radius: 5px; padding: 12px; }
-  .ban-slots { gap: 7px; }
-  .ban-slot { border-color: #d5dfe2; border-radius: 4px; background: #f7f9f9; }
-  .ban-slot.filled { border-color: #dfa1a1; background: #fff9f9; }
-  .ban-slot img { width: 48px; height: 48px; border-radius: 5px; }
-  .ban-slot .order { color: #9aa5ad; }
-  .round { border-radius: 4px; padding: 5px 10px; background: #fafcfc; border-color: var(--border); }
-  .round.cur { border-color: #d49a55; background: #fff8ee; color: #ad6a2a; box-shadow: none; }
-  .round.done { color: #9aabb0; }
-  .round.blue { color: var(--cyan); border-color: #afd3d1; }
-  .round.red { color: var(--red); border-color: #e3c0c0; }
-  .load-progress { height: 8px; background: #eef2f3; border: 0; border-radius: 3px; }
-  .load-bar { border-radius: 3px; background: var(--cyan); }
-  .grid { gap: 10px; }
-  .hero-card, .aug-card { background: #fbfcfc; border: 1px solid var(--border); border-radius: 5px; padding: 14px; box-shadow: none; }
-  .hero-card:hover { transform: translateY(-1px); border-color: #8ebdbb; box-shadow: 0 5px 14px rgba(20,125,128,.08); }
-  .hero-card img { width: 58px; height: 58px; border-radius: 5px; object-fit: cover; }
-  .hero-card .name, .aug-card .name { color: var(--text); }
-  .hero-card .win, .aug-card .win { margin-top: 7px; }
-  .hero-card .counters, .aug-card .sub2 { color: var(--dim); }
-  .hero-card .rank { top: 9px; left: 9px; background: #eef2f2; color: var(--dim); border-radius: 3px; }
-  .rank-tag { top: 9px; right: 9px; background: #eef2f2; border-radius: 3px; }
-  .tier-badge { border-radius: 3px; }
-  .t0 { background: #fceaea; color: #b54c4c; }
-  .t1 { background: #fcf3e6; color: #a86a2e; }
-  .t2 { background: #e8f5f4; color: #147d80; }
-  .t3 { background: #eef1f3; color: #647681; }
-  .t4 { background: #f4f5f6; color: #87939c; }
-  .win-hi { color: var(--green); } .win-lo { color: var(--red); } .win-mid { color: #4d606c; }
-  .recent-row { background: #fbfcfc; border-left-width: 3px; }
-  .recent-detail { background: rgba(0,0,0,.015); }
-  .type-eval { background: #f5f8f8; border: 1px solid #e5ebec; border-radius: 4px; }
-  #frList { grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); }
-  .fr-card { background: #fbfcfc; border: 1px solid var(--border); border-radius: 5px; padding: 15px; }
-  .fr-card.good { border-color: #9bceb6; }
-  .fr-card.mid { border-color: #e3c898; }
-  .fr-card.bad { border-color: #e2b0b0; }
-  .fr-card.sel { box-shadow: 0 0 0 3px rgba(20,125,128,.1); border-color: var(--cyan); }
-  .fr-card .avatar { border-color: #dbe3e5; }
-  table { font-size: 13px; }
-  th { padding: 10px; color: #7d8a94; border-bottom-color: #d9e0e3; }
-  td { padding: 10px; border-bottom-color: #edf0f1; }
-  tr:hover td { background: #f5faf9; }
-  td.hero img { object-fit: cover; }
-  .team-header { margin: 15px 0 7px; }
-  .mini { border-radius: 3px; background: #fff; }
-  .badge-ban { border-radius: 3px; }
-  .aug-card .icon { border-radius: 5px; }
-  @media (max-width: 900px) {
-    .sidebar { width: 214px; }
-    .app-main { width: calc(100% - 214px); margin-left: 214px; }
-    .wrap { padding-left: 26px; padding-right: 26px; }
-    .brand { padding-left: 5px; }
-  }
-  @media (max-width: 680px) {
-    .app-shell { display: block; }
-    .sidebar { position: static; width: 100%; padding: 14px 14px 10px; }
-    .brand { padding: 0 4px 14px; }
-    .side-label, .side-footer { display: none; }
-    #tabs, .tool-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
-    .tool-nav { margin-top: 4px; }
-    #tabs button, .tool-nav button { justify-content: center; min-height: 36px; padding: 7px 5px; gap: 5px; font-size: 11px; }
-    .nav-icon { width: auto; font-size: 14px; }
-    .nav-arrow { display: none; }
-    .app-main { width: 100%; margin-left: 0; }
-    .wrap { padding: 0 14px 40px; }
-    header { min-height: 0; align-items: flex-start; flex-direction: column; gap: 15px; padding: 20px 0 17px; margin-bottom: 16px; }
-    .page-heading h1 { font-size: 22px; }
-    .topbar-controls { width: 100%; justify-content: flex-start; gap: 10px; }
-    .card { padding: 15px; margin-bottom: 12px; }
-    .stage-top { padding: 16px; }
-    .stage-top .st-timer { margin-left: auto; }
-    .board { grid-template-columns: repeat(2, 1fr); }
-    .ban-slots { grid-template-columns: repeat(5, minmax(42px, 1fr)); gap: 4px; }
-    .ban-slot img { width: 34px; height: 34px; }
-    .recent-row { grid-template-columns: 1fr 40px 58px 42px; gap: 5px; }
-    .recent-row .rm, .recent-row .rd { display: none; }
-    input[type=text] { width: 100%; min-width: 0; }
-    .row > input[type=text] { flex: 1 1 100%; }
-    .row > select, .row > button.primary { flex: 1 1 auto; }
-    table { min-width: 640px; }
-    .table-wrap { overflow-x: auto; }
-  }
-  /* ---------- T101 BP command deck v3 ---------- */
-  :root {
-    --bg: #080b11;
-    --bg2: #0d121a;
-    --card: #111821;
-    --card2: #151f2a;
-    --panel: #192532;
-    --border: #263443;
-    --border-soft: #1b2733;
-    --text: #e8eef2;
-    --dim: #8493a3;
-    --muted: #647383;
-    --gold: #d6a35d;
-    --cyan: #43c7d1;
-    --green: #61ce91;
-    --red: #eb737c;
-    --orange: #e7ad55;
-    --sidebar: #0b1017;
-    --sidebar-muted: #7e8d9b;
-    --shadow: 0 14px 32px rgba(0,0,0,.18);
-  }
-  html { background: var(--bg); }
-  body { background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.45; }
-  body::before { content: ''; position: fixed; inset: 0; pointer-events: none; border-top: 2px solid rgba(67,199,209,.15); z-index: 20; }
-  button, input, select { font-family: inherit; }
-  button { transition: background-color .14s, color .14s, border-color .14s, transform .14s, box-shadow .14s; }
-  .app-shell { min-height: 100vh; display: flex; }
-  .sidebar { position: fixed; inset: 0 auto 0 0; width: 236px; padding: 27px 15px 20px; display: flex; flex-direction: column; background: var(--sidebar); border-right: 1px solid #1c2a37; color: var(--text); z-index: 5; }
-  .brand { display: flex; align-items: center; gap: 11px; padding: 0 11px 31px; }
-  .brand-mark { width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid rgba(214,163,93,.75); color: var(--gold); font-size: 11px; font-weight: 800; letter-spacing: 1.2px; background: #111923; }
-  .brand-copy { display: flex; flex-direction: column; gap: 1px; }
-  .brand-copy strong { color: #f0f4f6; font-size: 16px; letter-spacing: .7px; }
-  .brand-copy span { color: #71808e; font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; }
-  .side-label { padding: 0 12px 9px; color: #536574; font-size: 10px; font-weight: 750; letter-spacing: 1.5px; text-transform: uppercase; }
-  .side-label-tools { margin-top: 25px; }
-  #tabs, .tool-nav { display: flex; flex-direction: column; gap: 3px; margin: 0; }
-  #tabs button, .tool-nav button { width: 100%; display: flex; align-items: center; gap: 10px; min-height: 43px; padding: 9px 11px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--sidebar-muted); text-align: left; font-size: 13px; cursor: pointer; }
-  #tabs button:hover, .tool-nav button:hover { background: #121c26; color: #e9f1f3; }
-  #tabs button.active, .tool-nav button.active { background: #162732; border-color: #234351; color: #eff7f8; box-shadow: inset 3px 0 0 var(--cyan); }
-  .nav-icon { width: 20px; color: #8294a1; font-size: 17px; line-height: 1; text-align: center; }
-  #tabs button.active .nav-icon, .tool-nav button.active .nav-icon { color: var(--cyan); }
-  .nav-arrow { margin-left: auto; color: #536674; font-size: 19px; line-height: 1; }
-  button.active .nav-arrow { color: var(--cyan); }
-  .side-footer { margin-top: auto; padding: 15px 12px 0; border-top: 1px solid #1b2935; }
-  .side-footer-kicker { color: #586b78; font-size: 9px; letter-spacing: 1.4px; }
-  .side-footer-title { margin-top: 5px; color: #d7e2e6; font-size: 12px; }
-  .side-footer-copy { margin-top: 3px; color: #71818e; font-size: 11px; line-height: 1.55; }
-  .app-main { min-width: 0; width: calc(100% - 236px); margin-left: 236px; }
-  .wrap { max-width: 1440px; margin: 0 auto; padding: 0 38px 70px; }
-  header { min-height: 102px; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 28px 0 23px; margin-bottom: 24px; border-bottom: 1px solid var(--border-soft); }
-  .page-heading { min-width: 0; }
-  .kicker { color: var(--cyan); font-size: 10px; font-weight: 750; letter-spacing: 1.5px; text-transform: uppercase; }
-  .kicker span { padding: 0 5px; color: #586a79; }
-  .page-heading h1 { margin-top: 3px; color: #f1f5f6; font-size: 25px; font-weight: 760; letter-spacing: .1px; }
-  .page-heading p { margin-top: 2px; color: var(--dim); font-size: 12px; }
-  .topbar-controls { display: flex; align-items: center; justify-content: flex-end; gap: 14px; flex-wrap: wrap; }
-  .status { display: flex; align-items: center; gap: 7px; color: var(--dim); font-size: 12px; white-space: nowrap; }
-  .status-label { color: #7c8b98; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: #53606b; }
-  .dot.on { background: var(--green); box-shadow: 0 0 0 3px rgba(97,206,145,.11); }
-  .dot.off { background: #53606b; box-shadow: 0 0 0 3px rgba(83,96,107,.12); }
-  .phase-badge { background: #172a31; border: 1px solid #28525a; padding: 5px 10px; border-radius: 3px; color: var(--cyan); font-size: 11px; font-weight: 650; white-space: nowrap; }
-  .switch { display: flex; align-items: center; gap: 7px; color: var(--dim); cursor: pointer; user-select: none; font-size: 12px; }
-  .switch input { position: absolute; opacity: 0; pointer-events: none; }
-  .switch-track { position: relative; width: 28px; height: 16px; border-radius: 9px; background: #334250; }
-  .switch-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 10px; height: 10px; border-radius: 50%; background: #b9c3ca; transition: left .15s, background-color .15s; }
-  .switch input:checked + .switch-track { background: #20666b; }
-  .switch input:checked + .switch-track::after { left: 15px; background: #dff7f5; }
-  section.tab { display: none; }
-  section.tab.active { display: block; animation: fade .18s ease; }
-  @keyframes fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 5px; padding: 20px; margin-bottom: 15px; box-shadow: var(--shadow); }
-  .card h3 { min-height: 22px; margin-bottom: 15px; color: #edf3f5; font-size: 15px; font-weight: 700; letter-spacing: .05px; }
-  .card h3 .hint { color: var(--dim); font-size: 12px; font-weight: 400; }
-  .card .card { margin: 17px 0 0; padding: 17px 0 0; background: transparent; border: 0; border-top: 1px solid var(--border); border-radius: 0; box-shadow: none; }
-  .row { gap: 9px; }
-  input[type=text], select { min-height: 38px; padding: 8px 11px; border: 1px solid #2b3a49; border-radius: 3px; background: #0d141c; color: var(--text); font-size: 13px; outline: none; }
-  input[type=text] { width: 290px; }
-  input[type=text]::placeholder { color: #5f7080; }
-  input[type=text]:focus, select:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(67,199,209,.1); }
-  button { min-height: 34px; border: 1px solid #2d3c4b; border-radius: 3px; background: #18232e; color: #a9b6c0; padding: 7px 12px; cursor: pointer; font-size: 13px; }
-  button:hover { border-color: #477d84; color: #e3f5f5; background: #1b3037; }
-  button.primary { min-height: 38px; padding: 8px 18px; border: 1px solid #267b81; border-radius: 3px; background: #176b73; color: #f4ffff; font-weight: 700; }
-  button.primary:hover { background: #21848a; filter: none; }
-  button.primary:disabled { opacity: .55; cursor: wait; }
-  .stage-top { position: relative; background: #101922; border: 1px solid #263746; border-left: 3px solid var(--cyan); border-radius: 5px; padding: 19px 22px 17px; margin-bottom: 15px; color: #edf4f4; box-shadow: var(--shadow); }
-  .stage-top .phase-badge { background: #162d34; border-color: #2c6269; color: #8ce1df; }
-  .stage-top .sub { color: #9aabb7; }
-  .st-timer { font-size: 28px; color: #e5b56d; letter-spacing: .5px; }
-  .st-timer.warn { color: #f08382; }
-  .flow { gap: 7px; margin-top: 15px; }
-  .flow .fp { padding: 5px 11px; border: 1px solid #30404d; border-radius: 3px; background: #141f29; color: #758795; font-size: 11px; }
-  .flow .fp.cur { border-color: #b77d3d; background: #2a2119; color: #e9bc7a; box-shadow: none; }
-  .flow .fp.done { border-color: #326267; color: #80c4c2; }
-  .flow i { color: #5c6f7b; }
-  .msg { padding: 20px; border: 1px dashed #31414e; border-radius: 4px; background: #0e151d; color: var(--dim); font-size: 13px; }
-  .sub { color: var(--dim); font-size: 12px; }
-  .err { color: var(--red); font-size: 12px; }
-  .hidden { display: none !important; }
-  .loading-spin { border-color: #30404d; border-top-color: var(--cyan); }
-  .board { gap: 9px; }
-  .slot { min-width: 0; background: var(--card2); border: 1px solid #2b3a48; border-radius: 4px; padding: 13px 9px; }
-  .slot.acting { border-color: #c28a4b; box-shadow: 0 0 0 3px rgba(194,138,75,.12); }
-  .slot.me { border-color: #32757a; background: #13272d; }
-  .slot.sel { border-color: #c28a4b; box-shadow: 0 0 0 3px rgba(194,138,75,.12); }
-  .slot img { width: 44px; height: 44px; border-radius: 4px; object-fit: cover; }
-  .slot .nm { margin-top: 8px; color: #dce6eb; }
-  .slot .ln { color: #81919f; }
-  .slot .tag { top: 6px; right: 6px; background: #c89352 !important; color: #261a0e !important; border-radius: 2px; }
-  .slot .cardback { background: #202931; border-color: #9a6b37; color: #c89352; box-shadow: none; }
-  .slot.flipped img { border-color: #c89352; box-shadow: 0 0 0 3px rgba(200,147,82,.13); }
-  .ban-board { gap: 12px; }
-  .ban-side { background: #0f171f; border: 1px solid #283744; border-radius: 4px; padding: 12px; }
-  .ban-slots { gap: 7px; }
-  .ban-slot { border-color: #30414e; border-radius: 3px; background: #111a23; }
-  .ban-slot.filled { border-color: #8c4e56; background: #20171c; }
-  .ban-slot img { width: 48px; height: 48px; border-radius: 4px; }
-  .ban-slot .order { color: #758593; }
-  .round { border-radius: 3px; padding: 5px 10px; background: #111a23; border-color: #2b3a48; }
-  .round.cur { border-color: #b77d3d; background: #2a2119; color: #e9bc7a; box-shadow: none; }
-  .round.done { color: #687783; }
-  .round.blue { color: var(--cyan); border-color: #2b6268; }
-  .round.red { color: var(--red); border-color: #673e47; }
-  .load-progress { height: 8px; background: #1a2631; border: 0; border-radius: 2px; }
-  .load-bar { border-radius: 2px; background: var(--cyan); }
-  .grid { gap: 10px; }
-  .hero-card, .aug-card { background: var(--card2); border: 1px solid #2a3947; border-radius: 4px; padding: 14px; box-shadow: none; }
-  .hero-card:hover { transform: translateY(-1px); border-color: #478d91; box-shadow: 0 6px 16px rgba(0,0,0,.16); }
-  .hero-card img { width: 58px; height: 58px; border-radius: 4px; object-fit: cover; }
-  .hero-card .name, .aug-card .name { color: #e6eef1; }
-  .hero-card .win, .aug-card .win { margin-top: 7px; }
-  .hero-card .counters, .aug-card .sub2 { color: #7f909e; }
-  .hero-card .rank { top: 9px; left: 9px; background: #202b36; color: #91a0aa; border-radius: 2px; }
-  .rank-tag { top: 9px; right: 9px; background: #202b36; border-radius: 2px; }
-  .tier-badge { border-radius: 2px; }
-  .t0 { background: #3b2328; color: #ef858a; }
-  .t1 { background: #3b2d1d; color: #e2b675; }
-  .t2 { background: #183237; color: #65cbd0; }
-  .t3 { background: #27313a; color: #a0aeb7; }
-  .t4 { background: #1d252d; color: #788793; }
-  .win-hi { color: var(--green); } .win-lo { color: var(--red); } .win-mid { color: #c6d1d7; }
-  .recent-row { background: #121b24; border-left-width: 3px; }
-  .recent-detail { background: rgba(255,255,255,.015); }
-  .type-eval { background: #0d151d; border: 1px solid #24333f; border-radius: 3px; }
-  .lobby-mode-stat { font-size: 10px !important; color: #8fa3ae !important; line-height: 1.45; }
-  #frList { grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); }
-  .fr-card { background: var(--card2); border: 1px solid #2a3947; border-radius: 4px; padding: 12px 12px 10px; }
-  .fr-card.good { border-color: #397559; }
-  .fr-card.mid { border-color: #7b6135; }
-  .fr-card.bad { border-color: #7a4148; }
-  .fr-card.sel { box-shadow: 0 0 0 3px rgba(67,199,209,.1); border-color: var(--cyan); }
-  .fr-card .avatar { border-color: #30404c; }
-  .mode-stat { background: rgba(255,255,255,.04); border-color: #2a3947; }
-  table { font-size: 13px; }
-  th { padding: 10px; color: #80909d; border-bottom-color: #2a3946; }
-  td { padding: 10px; border-bottom-color: #1e2b37; }
-  tr:hover td { background: #15272e; }
-  td.hero img { object-fit: cover; }
-  .team-header { margin: 15px 0 7px; }
-  .mini { border-radius: 2px; background: #18232e; }
-  .badge-ban { border-radius: 2px; }
-  .aug-card .icon { border-radius: 4px; }
-  #stMyBoard, #stEnemyBoard { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  #stMyBoard::before, #stEnemyBoard::before { grid-column: 1 / -1; color: var(--cyan); font-size: 11px; font-weight: 700; letter-spacing: .7px; text-align: left; }
-  #stMyBoard::before { content: '我方阵容'; }
-  #stEnemyBoard::before { content: '对方阵容'; color: var(--red); margin-top: 5px; }
-  #stBans, #stPicks, #stHexPool { border-top: 1px solid #273643; padding-top: 14px; }
-  @media (max-width: 900px) {
-    .sidebar { width: 214px; }
-    .app-main { width: calc(100% - 214px); margin-left: 214px; }
-    .wrap { padding-left: 26px; padding-right: 26px; }
-    .brand { padding-left: 5px; }
-  }
-  @media (max-width: 680px) {
-    .app-shell { display: block; }
-    .sidebar { position: static; width: 100%; padding: 14px 14px 10px; }
-    .brand { padding: 0 4px 14px; }
-    .side-label, .side-footer { display: none; }
-    #tabs, .tool-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
-    .tool-nav { margin-top: 4px; }
-    #tabs button, .tool-nav button { justify-content: center; min-height: 36px; padding: 7px 5px; gap: 5px; font-size: 11px; }
-    .nav-icon { width: auto; font-size: 14px; }
-    .nav-arrow { display: none; }
-    .app-main { width: 100%; margin-left: 0; }
-    .wrap { padding: 0 14px 40px; }
-    header { min-height: 0; align-items: flex-start; flex-direction: column; gap: 15px; padding: 20px 0 17px; margin-bottom: 16px; }
-    .page-heading h1 { font-size: 22px; }
-    .topbar-controls { width: 100%; justify-content: flex-start; gap: 10px; }
-    .card { padding: 15px; margin-bottom: 12px; }
-    .stage-top { padding: 16px; }
-    .stage-top .st-timer { margin-left: auto; }
-    .board { grid-template-columns: repeat(2, 1fr); }
-    #stMyBoard, #stEnemyBoard { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .ban-slots { grid-template-columns: repeat(5, minmax(42px, 1fr)); gap: 4px; }
-    .ban-slot img { width: 34px; height: 34px; }
-    .recent-row .recent-summary { grid-template-columns: 1fr 40px 58px 42px 14px; gap: 5px; }
-    .recent-row .rm, .recent-row .rd { display: none; }
-    input[type=text] { width: 100%; min-width: 0; }
-    .row > input[type=text] { flex: 1 1 100%; }
-    .row > select, .row > button.primary { flex: 1 1 auto; }
-    table { min-width: 640px; }
-    .table-wrap { overflow-x: auto; }
-  }
-  /* 内页签选中态：好友状态（海斗/排位）、海克斯大乱斗（英雄榜/海克斯榜/拍档榜） */
-  .tab-btn { position: relative; }
-  .tab-btn.active { color: var(--gold) !important; border-color: var(--gold) !important; background: rgba(214,163,93,.12) !important; font-weight: 700; }
-  .tab-btn.active::after { content: ''; position: absolute; left: 50%; bottom: -3px; transform: translateX(-50%); width: 60%; height: 2px; border-radius: 1px; background: var(--gold); }
+/* ============ 推荐卡片 ============ */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 8px; }
+.hero-card {
+  position: relative; text-align: center;
+  background: linear-gradient(180deg, rgba(18, 38, 60, .62), rgba(10, 20, 40, .62));
+  border: 1px solid var(--border); border-radius: 3px;
+  padding: 10px 8px;
+  transition: transform .15s, border-color .15s, box-shadow .15s;
+}
+.hero-card:hover { transform: translateY(-2px); border-color: rgba(10, 200, 185, .6); box-shadow: 0 6px 16px rgba(0, 0, 0, .38); }
+.hero-card img { width: 52px; height: 52px; margin: 0 auto 7px; border-radius: 3px; object-fit: cover; }
+.hero-card .name { font-size: 12.5px; font-weight: 700; color: #f0e6d2; }
+.hero-card .lane { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.hero-card .win { font-size: 13px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.hero-card .counters { font-size: 10px; color: var(--dim); margin-top: 4px; line-height: 1.55; }
+.hero-card .rank {
+  position: absolute; top: 6px; left: 6px; z-index: 2;
+  font-size: 9.5px; font-weight: 700; padding: 1px 6px; border-radius: 1px;
+  background: rgba(1, 10, 19, .8); border: 1px solid rgba(200, 170, 110, .42);
+  color: var(--gold);
+}
+.tier-badge {
+  display: inline-block; margin-top: 5px;
+  font-size: 10px; font-weight: 800; letter-spacing: .5px;
+  padding: 1px 7px; border-radius: 1px;
+}
+.t0 { background: rgba(232, 64, 87, .16); color: #ff8b97; border: 1px solid rgba(232, 64, 87, .42); }
+.t1 { background: rgba(200, 170, 110, .16); color: var(--gold); border: 1px solid rgba(200, 170, 110, .48); }
+.t2 { background: rgba(10, 200, 185, .13); color: #7fe8dd; border: 1px solid rgba(10, 200, 185, .36); }
+.t3 { background: rgba(160, 155, 140, .12); color: var(--dim); border: 1px solid rgba(160, 155, 140, .3); }
+.t4 { background: rgba(160, 155, 140, .06); color: #6b7784; border: 1px solid rgba(160, 155, 140, .18); }
+.win-hi { color: var(--green); } .win-lo { color: var(--red); } .win-mid { color: #d8cfb8; }
 
-  /* ===== 侧边停靠面板（?side=1，Tauri 壳 400px） ===== */
-  body.side .app-shell { display: block; }
-  body.side .sidebar { position: sticky; top: 0; z-index: 30; width: 100%; height: auto; flex-direction: row; align-items: center; gap: 4px; padding: 5px 8px; border-right: 0; border-bottom: 1px solid #1c2a37; background: #0d151d; user-select: none; -webkit-user-select: none; }
-  body.side .brand, body.side .side-label, body.side .side-footer, body.side .tool-nav { display: none !important; }
-  body.side #tabs { display: flex; flex-direction: row; gap: 3px; margin: 0; }
-  body.side #tabs button { width: auto; min-height: 28px; padding: 4px 10px; gap: 5px; border-radius: 3px; font-size: 12px; justify-content: center; }
-  body.side #tabs .nav-icon { width: auto; font-size: 12px; }
-  body.side #tabs .nav-arrow { display: none; }
-  body.side .app-main { width: 100%; margin-left: 0; }
-  body.side .wrap { max-width: none; padding: 8px 10px 34px; }
-  body.side header { min-height: 0; gap: 6px; padding: 6px 0 8px; margin-bottom: 10px; }
-  body.side .page-heading { display: flex; align-items: center; gap: 8px; }
-  body.side .page-heading h1 { font-size: 14px; margin: 0; }
-  body.side .page-heading p, body.side .kicker { display: none; }
-  body.side .topbar-controls { gap: 6px; }
-  body.side .status { font-size: 11px; }
-  body.side .status-label { display: none; }
-  body.side .phase-badge { padding: 3px 8px; font-size: 10px; }
-  body.side .switch span:not(.switch-track) { display: none; }
-  body.side .panel-tools { display: flex; gap: 4px; }
-  body.side .panel-tools button { min-height: 26px; padding: 3px 8px; font-size: 11px; border-radius: 3px; }
-  body.side .panel-tools #panelDock.on { border-color: #267b81; color: #7fe3e0; background: #12343a; }
-  body.side .panel-tools #panelClose { color: #c98a8a; }
-  body.side .card { padding: 12px; margin-bottom: 10px; }
-  body.side .card h3 { font-size: 13px; margin-bottom: 10px; min-height: 18px; }
-  body.side .card .card { margin: 12px 0 0; padding: 12px 0 0; }
-  body.side .stage-top { padding: 12px 14px; margin-bottom: 10px; }
-  body.side .st-timer { font-size: 22px; }
-  body.side .flow { gap: 4px; margin-top: 8px; }
-  body.side .flow .fp { padding: 3px 8px; font-size: 10px; }
-  body.side .board { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
-  body.side .slot { padding: 5px 2px; }
-  body.side .slot img { width: 30px; height: 30px; }
-  body.side .slot .nm { font-size: 10px; margin-top: 3px; }
-  body.side .slot .ln { font-size: 9px; }
-  body.side .slot .cardback { width: 30px; height: 30px; font-size: 14px; }
-  body.side .ban-board { grid-template-columns: 1fr; gap: 10px; }
-  body.side .ban-slots { gap: 4px; }
-  body.side .ban-slot img { width: 34px; height: 34px; }
-  body.side .grid { gap: 6px; }
-  body.side .hero-card { padding: 10px 8px; }
-  body.side .hero-card img { width: 44px; height: 44px; }
-  body.side .hero-card .name { font-size: 12px; }
-  body.side .msg { padding: 14px; font-size: 12px; }
-  body.side .mp-wrap { grid-template-columns: 1fr; }
-  body.side .recent-row .recent-summary { grid-template-columns: 28px 36px 1fr 40px 36px 12px; gap: 4px; padding: 4px 8px; }
-  body.side .recent-row .rm { display: none; }
-  body.side #frList { grid-template-columns: 1fr; }
-  /* 游戏/加载：10 人战绩表格紧凑化（400px 面板内尽量不横向滚动） */
-  body.side table { min-width: 0; font-size: 11px; }
-  body.side th, body.side td { padding: 4px 5px; }
-  body.side td.hero img { width: 22px; height: 22px; }
-  body.side td .sub { font-size: 10px; }
-  body.side .team-header { margin: 10px 0 4px; }
-  body.side #stGamePlayers, body.side #stLoadingBody { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* ============ 徽章 chips ============ */
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px 3px 3px;
+  background: rgba(255, 255, 255, .03); border: 1px solid var(--border);
+  border-radius: 2px; font-size: 11.5px; color: var(--text);
+}
+.chip img { width: 24px; height: 24px; border-radius: 2px; }
+.chip.red { border-color: rgba(232, 64, 87, .45); }
+.chip.blue { border-color: rgba(10, 200, 185, .45); }
+
+/* ============ 加载进度条 ============ */
+.load-progress {
+  height: 8px; border-radius: 2px; overflow: hidden;
+  background: #0a1428; border: 1px solid rgba(200, 170, 110, .28);
+  margin-bottom: 12px;
+}
+.load-bar {
+  height: 100%; width: 0; border-radius: 2px;
+  background: linear-gradient(90deg, var(--cyan), var(--gold));
+  box-shadow: 0 0 8px rgba(200, 170, 110, .55);
+  animation: loadfill 1.4s ease-in-out infinite;
+}
+@keyframes loadfill { 0% { width: 5%; } 50% { width: 65%; } 100% { width: 5%; } }
+
+/* ============ 逐场战绩明细 ============ */
+.recent-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.recent-row {
+  border-radius: 2px; background: rgba(255, 255, 255, .02);
+  border-left: 3px solid #3a4553;
+}
+.recent-row.win { border-left-color: var(--green); }
+.recent-row.lose { border-left-color: var(--red); }
+.recent-row .recent-summary {
+  display: grid; grid-template-columns: 52px 30px 1fr 44px 34px 12px; gap: 5px; align-items: center;
+  padding: 5px 8px; cursor: pointer; list-style: none;
+}
+.recent-row .recent-summary::-webkit-details-marker { display: none; }
+.recent-row .recent-summary::after { content: '▸'; color: var(--muted); justify-self: end; font-size: 10px; transition: transform .15s; }
+.recent-row[open] .recent-summary::after { content: '▾'; }
+.recent-row .rt { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.recent-row .rm { display: none; }
+.recent-row .ri { width: 26px; height: 26px; border-radius: 2px; object-fit: cover; }
+.recent-row .rh { font-size: 11.5px; color: #e8e0cf; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-row .rk { font-size: 10.5px; color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
+.recent-row .rd { display: none; }
+.recent-row .rr { font-size: 11px; font-weight: 700; text-align: right; }
+.recent-row.win .rr { color: var(--green); }
+.recent-row.lose .rr { color: var(--red); }
+.recent-detail {
+  padding: 8px 10px 10px;
+  border-top: 1px dashed rgba(160, 155, 140, .24);
+  margin: 0 8px 6px 36px;
+}
+.recent-detail .rd-line { font-size: 10.5px; color: var(--dim); line-height: 1.85; }
+.recent-detail .rd-items { display: flex; gap: 3px; margin-top: 6px; flex-wrap: wrap; }
+.recent-detail .item-ic {
+  width: 24px; height: 24px; border-radius: 2px;
+  border: 1px solid var(--border); background: rgba(255, 255, 255, .04);
+}
+.type-eval {
+  display: flex; flex-direction: column; gap: 3px;
+  margin-top: 8px; padding: 7px 10px; border-radius: 2px;
+  background: rgba(255, 255, 255, .025); border: 1px solid rgba(200, 170, 110, .14);
+  font-size: 11px; line-height: 1.75; color: var(--dim);
+}
+.type-eval b { color: var(--gold); }
+
+/* ============ 完整对局 10 人（逐场详情） ============ */
+.mp-wrap { display: grid; grid-template-columns: 1fr; gap: 6px; margin-top: 8px; }
+@media (min-width: 620px) { .mp-wrap { grid-template-columns: 1fr 1fr; } }
+.mp-side { border: 1px solid var(--border); border-radius: 3px; padding: 6px; background: rgba(255, 255, 255, .015); }
+.mp-side.blue { border-color: rgba(10, 200, 185, .35); }
+.mp-side.red { border-color: rgba(232, 64, 87, .35); }
+.mp-label { font-size: 10px; letter-spacing: 1px; color: var(--dim); font-weight: 700; margin-bottom: 4px; }
+.mp-row { display: flex; align-items: center; gap: 6px; padding: 3px 4px; border-radius: 2px; }
+.mp-row.self { outline: 1px solid rgba(200, 170, 110, .55); background: rgba(200, 170, 110, .07); }
+.mp-ic { width: 24px; height: 24px; border-radius: 2px; flex: none; object-fit: cover; }
+.mp-info { flex: 1; min-width: 0; }
+.mp-name { font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mp-me { color: var(--gold); font-size: 9px; border: 1px solid var(--gold); border-radius: 2px; padding: 0 3px; margin-left: 2px; }
+.mp-sub { font-size: 9.5px; color: var(--dim); }
+.mp-items { display: flex; gap: 2px; flex: none; }
+.mp-items img { width: 16px; height: 16px; border-radius: 2px; border: 1px solid var(--border); background: rgba(255, 255, 255, .04); }
+
+/* ============ 玩家列表 ============ */
+.team-header { font-size: 12px; font-weight: 700; letter-spacing: 1px; margin: 10px 0 4px; display: flex; align-items: center; gap: 6px; }
+.team-header.blue { color: #7fd4ce; } .team-header.red { color: #f08793; }
+
+/* ============ 房间内页签统计 ============ */
+.lobby-mode-stat { font-size: 9.5px !important; color: var(--muted) !important; line-height: 1.5; }
+
+/* ============ 通用 ============ */
+.msg {
+  padding: 16px; text-align: center;
+  color: var(--dim); font-size: 12.5px; line-height: 1.8;
+  border: 1px dashed rgba(160, 155, 140, .36); border-radius: 3px;
+  background: rgba(255, 255, 255, .015);
+}
+.sub { font-size: 11px; color: var(--dim); }
+.hidden { display: none !important; }
+#stIdleMsgIcon { filter: drop-shadow(0 0 12px rgba(200, 170, 110, .4)); }
+
+/* ============ v2 窄窗布局 ============ */
+body { overflow-y: auto; }
+.topbar {
+  min-height: 44px; padding: 7px 8px; gap: 6px;
+  background: #07131f; border-bottom-color: rgba(10, 200, 185, .24);
+}
+.topbar::before { height: 1px; background: linear-gradient(90deg, transparent, rgba(10, 200, 185, .7), rgba(200, 170, 110, .65), transparent); }
+.brand { gap: 7px; min-width: 63px; }
+.brand-mark { width: 26px; height: 26px; font-size: 8.5px; }
+.brand-copy strong { font-size: 12px; letter-spacing: .6px; }
+.topbar-right { gap: 4px; overflow: hidden; }
+.status { max-width: 70px; gap: 4px; font-size: 10px; }
+#lcuText { max-width: 58px; }
+.phase-badge { max-width: 64px; overflow: hidden; text-overflow: ellipsis; padding: 3px 5px; font-size: 9px; letter-spacing: .2px; }
+.switch { gap: 0; }
+.switch-track { width: 25px; height: 14px; }
+.panel-tools { gap: 2px; }
+.panel-tools button { width: 25px; min-width: 25px; height: 25px; padding: 0; font-size: 10px; }
+.panel-tools button:hover { transform: translateY(-1px); }
+.wrap { padding: 10px 9px 42px; }
+
+.stage-top {
+  margin-bottom: 9px; padding: 10px 11px 9px;
+  border-top-width: 1px; box-shadow: 0 5px 15px rgba(0, 0, 0, .28);
+}
+.stage-summary {
+  display: grid; grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto; align-items: center; gap: 4px 7px;
+}
+.stage-summary #stPhase { grid-column: 1; grid-row: 1; }
+.stage-summary #stTimer { grid-column: 2; grid-row: 1; }
+.stage-summary #stMode { grid-column: 3; grid-row: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stage-summary #stTurn { grid-column: 1 / -1; grid-row: 2; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-timer { font-size: 20px; }
+.flow { margin-top: 11px; }
+.flow .fp { padding-top: 14px; font-size: 9px; letter-spacing: 0; }
+.flow .fp::before { width: 8px; height: 8px; }
+.flow .fp::after { top: 3px; left: calc(50% + 6px); width: calc(100% - 12px); }
+
+.stage-panel {
+  margin-bottom: 9px; padding: 10px;
+  background: rgba(9, 25, 42, .82); border: 1px solid #1a354d; border-radius: 4px;
+  box-shadow: 0 5px 16px rgba(0, 0, 0, .22);
+}
+.stage-panel > h3, .subpanel > h3 {
+  margin-bottom: 9px; padding-bottom: 7px; border-bottom-color: rgba(10, 200, 185, .16);
+}
+.subpanel {
+  margin-top: 9px; padding: 9px 10px;
+  background: rgba(255, 255, 255, .018); border: 1px solid #1a354d; border-radius: 3px;
+}
+.subpanel:first-child { margin-top: 0; }
+.subpanel:empty { display: none; }
+.danger-panel { border-color: rgba(232, 64, 87, .3); }
+.success-panel { border-color: rgba(57, 201, 107, .28); }
+.feature-panel { border-color: rgba(200, 170, 110, .5); background: rgba(200, 170, 110, .055); }
+.split-panel { flex: 1; min-width: 0; }
+.idle-message { padding: 27px 16px 21px; border-style: solid; border-color: rgba(200, 170, 110, .22); background: rgba(255, 255, 255, .018); }
+.idle-icon { margin-bottom: 8px; font-size: 34px; line-height: 1; }
+.idle-title { font-size: 14px; font-weight: 700; color: var(--text); }
+.idle-copy { max-width: 280px; margin: 7px auto 0; line-height: 1.65; }
+.idle-foot { display: inline-flex; align-items: center; gap: 6px; margin-top: 15px; color: var(--muted); font-size: 10px; }
+.state-pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 8px rgba(10, 200, 185, .8); }
+
+#stLobbyBoard { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+#stLobbyBoard .slot { display: grid; grid-template-columns: 31px minmax(0, 1fr); grid-template-rows: auto auto auto auto; gap: 0 6px; padding: 7px; text-align: left; }
+#stLobbyBoard .slot img { grid-column: 1; grid-row: 1 / span 4; width: 31px; height: 31px; margin: 0; }
+#stLobbyBoard .slot .nm, #stLobbyBoard .slot .ln { grid-column: 2; }
+#stLobbyBoard .slot .nm { margin-top: 0; }
+#stLobbyBoard .slot .ln { margin-top: 1px; }
+#stLobbyBoard .lobby-mode-stat { font-size: 9px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ban-board { gap: 7px; }
+.ban-side { padding: 7px; }
+.ban-slots { gap: 3px; }
+.ban-slot { min-width: 0; aspect-ratio: auto; min-height: 65px; gap: 3px; }
+.ban-slot img { width: 32px; height: 32px; }
+.ban-slot .nm { font-size: 9px; }
+#stMyBoard, #stEnemyBoard { gap: 4px; }
+.slot { padding: 7px 2px 6px; }
+.slot img, .slot .cardback { width: 36px; height: 36px; }
+.slot .nm { margin-top: 5px; font-size: 9.5px; }
+.slot .ln { font-size: 9px; }
+.grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.hero-card { padding: 8px 5px; }
+.hero-card img { width: 44px; height: 44px; margin-bottom: 5px; }
+.hero-card .name { font-size: 11px; }
+.hero-card .win { font-size: 12px; }
+.hero-card .counters { font-size: 9px; }
+#stHex > .row { display: block; }
+#stHex > .row .split-panel { margin-top: 9px; }
+
+/* 加载/游戏中的玩家条目，替代表格横向溢出 */
+.player-list { display: flex; flex-direction: column; gap: 4px; }
+.player-row {
+  display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 7px; align-items: center;
+  min-height: 47px; padding: 6px; background: rgba(255, 255, 255, .025);
+  border: 1px solid rgba(30, 51, 73, .75); border-left: 2px solid var(--border); border-radius: 3px;
+}
+.player-row.self { border-left-color: var(--gold); background: rgba(200, 170, 110, .07); }
+.player-row.blue { border-left-color: rgba(10, 200, 185, .65); }
+.player-row.red { border-left-color: rgba(232, 64, 87, .65); }
+.player-avatar, .player-avatar img { width: 32px; height: 32px; border-radius: 3px; object-fit: cover; }
+.player-avatar { display: grid; place-items: center; background: #14283d; color: var(--gold); font-size: 8px; font-weight: 800; }
+.player-main { min-width: 0; }
+.player-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 700; color: var(--text); }
+.player-hero { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9.5px; color: var(--dim); }
+.player-meta { min-width: 70px; max-width: 145px; text-align: right; font-size: 9px; color: var(--dim); line-height: 1.45; }
+.player-rank { color: var(--gold); white-space: nowrap; }
+.player-recent { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-recent b { color: var(--gold); }
+.team-header { margin: 9px 0 4px; padding: 0 3px; font-size: 10px; letter-spacing: 1px; }
+.team-header:first-child { margin-top: 0; }
+#stGamePlayers, #stLoadingBody { overflow: visible; }
+
+@media (min-width: 620px) {
+  #stHex > .row { display: flex; }
+  #stHex > .row .split-panel { margin-top: 0; }
+  #stLobbyBoard { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  #stLobbyBoard .slot { display: block; text-align: center; }
+  #stLobbyBoard .slot img { width: 36px; height: 36px; margin: 0 auto; }
+  #stLobbyBoard .slot .nm { margin-top: 5px; }
+}
 </style>
 </head>
 <body>
-<script>if (new URLSearchParams(location.search).has('side')) document.body.classList.add('side');</script>
-<div class="app-shell">
-  <aside class="sidebar">
-    <div class="brand">
-      <div class="brand-mark">101</div>
-      <div class="brand-copy"><strong>T101</strong><span>对局助手</span></div>
+<div class="topbar">
+  <div class="brand"><div class="brand-mark">101</div><div class="brand-copy"><strong>T101</strong><span>对局助手</span></div></div>
+  <div class="topbar-right">
+    <div class="status" id="lcuStatus"><span class="dot" id="lcuDot"></span><span class="status-label">客户端</span><span id="lcuText">检测中…</span></div>
+    <span class="phase-badge hidden" id="phaseBadge"></span>
+    <label class="switch" title="自动同步（3 秒轮询当前对局）"><input type="checkbox" id="autoRefresh" checked><span class="switch-track"></span><span>自动同步</span></label>
+    <div class="panel-tools">
+      <button id="panelArrange" title="一键排布：客户端窗口左 2/3、面板贴右侧；游戏全屏时仅归位面板"><span class="gi">⛶</span><span class="bt">排布</span></button>
+      <button id="panelDock" title="停靠跟随开关（快捷键 F10）"><span class="gi">⧉</span><span class="bt">停靠</span></button>
+      <button id="panelRefresh" title="重新加载页面"><span class="gi">↻</span><span class="bt">刷新</span></button>
+      <button id="panelClose" title="退出面板（快捷键 Ctrl+Alt+F12）"><span class="gi">✕</span><span class="bt">关闭</span></button>
     </div>
-    <div class="side-label">工作台</div>
-    <nav id="tabs">
-      <button data-tab="bp" data-title="对局监控" data-subtitle="实时跟踪对局流程与阵容建议" class="active"><span class="nav-icon">⌂</span><span>对局监控</span><span class="nav-arrow">›</span></button>
-      <button data-tab="friends" data-title="好友状态" data-subtitle="查看在线好友的近期对局状态"><span class="nav-icon">◎</span><span>好友状态</span><span class="nav-arrow">›</span></button>
-    </nav>
-    <div class="side-label side-label-tools">分析工具</div>
-    <nav class="tool-nav">
-      <button data-tab="pick" data-title="Pick 推荐" data-subtitle="按对位关系筛选当前最优选择"><span class="nav-icon">＋</span><span>Pick 推荐</span><span class="nav-arrow">›</span></button>
-      <button data-tab="ban" data-title="Ban 建议" data-subtitle="结合版本强度与我方阵容给出禁用建议"><span class="nav-icon">−</span><span>Ban 建议</span><span class="nav-arrow">›</span></button>
-      <button data-tab="rank" data-title="英雄榜单" data-subtitle="按位置与段位浏览当前版本数据"><span class="nav-icon">≡</span><span>英雄榜单</span><span class="nav-arrow">›</span></button>
-      <button data-tab="hex" data-title="海克斯大乱斗" data-subtitle="海斗英雄榜 / 海克斯榜 / 最佳拍档榜"><span class="nav-icon">◇</span><span>海克斯大乱斗</span><span class="nav-arrow">›</span></button>
-      <button data-tab="hero" data-title="对位克制" data-subtitle="查看单英雄的优势与劣势对线"><span class="nav-icon">⌕</span><span>对位克制</span><span class="nav-arrow">›</span></button>
-    </nav>
-    <div class="side-footer">
-      <div class="side-footer-kicker">LOCAL CLIENT</div>
-      <div class="side-footer-title">只读连接</div>
-      <div class="side-footer-copy">数据来自本机客户端与官方榜单</div>
-    </div>
-  </aside>
-  <main class="app-main">
-    <div class="wrap">
-      <header>
-        <div class="page-heading">
-          <div class="kicker">实时工作台 <span>/</span> T101</div>
-          <h1 id="pageTitle">对局监控</h1>
-          <p id="pageSubtitle">实时跟踪对局流程与阵容建议</p>
-        </div>
-        <div class="topbar-controls">
-          <div class="status" id="lcuStatus"><span class="dot" id="lcuDot"></span><span class="status-label">客户端</span><span id="lcuText">检测中…</span></div>
-          <span class="phase-badge hidden" id="phaseBadge"></span>
-          <label class="switch"><input type="checkbox" id="autoRefresh" checked><span class="switch-track"></span><span>自动同步</span></label>
-          <div class="panel-tools hidden">
-            <button id="panelArrange" title="一键排布：游戏/客户端窗口左 2/3，面板贴右侧">⧉ 排布</button>
-            <button id="panelDock" title="停靠跟随开关（快捷键 F10）">⧉ 停靠</button>
-            <button id="panelRefresh" title="重新加载页面">↻</button>
-            <button id="panelClose" title="退出面板（快捷键 Ctrl+Alt+F12）">✕</button>
-          </div>
-        </div>
-      </header>
+  </div>
+</div>
+<div class="wrap">
 
 
   <!-- ===== 对局（按真实流程：房间 → 禁用 → 选人 → 加载 → 游戏） ===== -->
   <section class="tab active" id="tab-bp">
     <!-- 状态栏 + 流程指示条 -->
     <div class="stage-top">
-      <div class="row" style="gap:14px;flex-wrap:wrap;align-items:center">
+      <div class="stage-summary">
         <span class="phase-badge" id="stPhase">—</span>
-        <span class="sub" id="stMode"></span>
         <span class="st-timer" id="stTimer"></span>
-        <span class="sub" id="stTurn" style="margin-left:auto"></span>
+        <span class="sub" id="stMode"></span>
+        <span class="sub" id="stTurn"></span>
       </div>
       <div class="flow" id="stFlow">
         <span class="fp" data-fp="room">1 房间</span><i>›</i>
@@ -746,24 +625,25 @@
     </div>
 
     <!-- ① 空闲：未在对局 / 匹配中 / 接受确认 -->
-    <div class="card" id="stIdle">
-      <div class="msg" style="padding:34px 18px">
-        <div style="font-size:40px;margin-bottom:10px" id="stIdleMsgIcon">🕹️</div>
-        <div style="font-size:15px;color:var(--text)" id="stIdleMsgTitle">未在对局流程中</div>
-        <div class="sub" style="margin-top:8px" id="stIdleMsgSub">创建房间后自动跟踪：房间 → 匹配 → 接受 → 禁用/翻牌 → 选人 → 加载 → 游戏</div>
+    <div class="stage-panel" id="stIdle">
+      <div class="msg idle-message">
+        <div class="idle-icon" id="stIdleMsgIcon">🕹️</div>
+        <div class="idle-title" id="stIdleMsgTitle">未在对局流程中</div>
+        <div class="idle-copy sub" id="stIdleMsgSub">创建房间后自动跟踪：房间 → 匹配 → 接受 → 禁用/翻牌 → 选人 → 加载 → 游戏</div>
+        <div class="idle-foot"><span class="state-pulse"></span>自动同步已开启</div>
       </div>
     </div>
 
     <!-- ② 队伍房间：接受对局后队友已就位 -->
-    <div class="card hidden" id="stLobby">
+    <div class="stage-panel hidden" id="stLobby">
       <h3>👥 队伍房间 <span class="hint" id="stLobbyHint"></span></h3>
       <div class="board" id="stLobbyBoard"></div>
-      <div class="card" style="margin:14px 0 0;border-color:rgba(11,198,227,.2)" id="stTeamEval"></div>
-      <div class="card" style="margin:14px 0 0;border-color:rgba(11,198,227,.2)" id="stRecent"></div>
+      <div class="subpanel" id="stTeamEval"></div>
+      <div class="subpanel" id="stRecent"></div>
     </div>
 
     <!-- ③ 禁用阶段（排位）：10 人同时 ban，蓝 5 + 红 5 -->
-    <div class="card hidden" id="stBan">
+    <div class="stage-panel hidden" id="stBan">
       <h3 style="color:var(--red)">🚫 禁用阶段 <span class="hint">10 人同时选，每人 1 个，共 10 个</span></h3>
       <div class="ban-board">
         <div class="ban-side">
@@ -775,43 +655,43 @@
           <div class="ban-slots" id="stEnemyBans"></div>
         </div>
       </div>
-      <div class="card" style="margin:14px 0 0;border-color:rgba(248,113,113,.25)">
+      <div class="subpanel danger-panel">
         <h3 style="color:var(--red)">🛡 推荐 Ban</h3>
         <div class="grid" id="stBans"></div>
       </div>
     </div>
 
     <!-- ④ 选人阶段（排位）：楼序轮选 B1B2→R1R2R3→B3B4→R4R5→B5 -->
-    <div class="card hidden" id="stPick">
+    <div class="stage-panel hidden" id="stPick">
       <h3>⚔ 选人阶段 <span class="hint">每轮 30s 倒计时</span></h3>
       <div class="rounds" id="stRounds"></div>
       <div class="board" id="stMyBoard" style="margin-top:10px"></div>
       <div class="board" id="stEnemyBoard" style="margin-top:10px"></div>
-      <div class="card" style="margin:14px 0 0;border-color:rgba(74,222,128,.25)">
+      <div class="subpanel success-panel">
         <h3 style="color:var(--green)">🎯 推荐 Pick</h3>
         <div class="grid" id="stPicks"></div>
       </div>
     </div>
 
-    <!-- ⑤ 海斗翻牌（海克斯大乱斗）：翻牌 → 共享池推荐（英雄选择推荐） -->
-    <div class="card hidden" id="stHex">
-      <h3 style="color:var(--gold)">🎴 翻牌阶段 <span class="hint">每人翻开自己的 2-3 张卡进共享池 · 全员从池中选 · 无 Ban · 约 60s 倒计时</span></h3>
+    <!-- ⑤ 海斗选人：LCU 共享英雄池 → 全员选定英雄 -->
+    <div class="stage-panel hidden" id="stHex">
+      <h3 style="color:var(--gold)">🎴 海斗选人阶段 <span class="hint">共享英雄池由 LCU benchChampions 提供 · 全员从池中选 · 无 Ban</span></h3>
       <!-- 你的英雄 · 海斗榜推荐（顶部显眼位置） -->
-      <div class="card" style="margin:0 0 14px;border-color:rgba(214,163,93,.55);background:linear-gradient(180deg, rgba(214,163,93,.09), transparent)" id="stHexHeroStatCard">
+      <div class="subpanel feature-panel" id="stHexHeroStatCard">
         <h3 style="color:var(--gold)">🏆 你的英雄 · 海斗榜推荐 <span class="hint">选定英雄后自动展示 · 101 海斗榜官方推荐海克斯</span></h3>
-        <div id="stHexHeroStat"><div class="msg">🎴 翻牌/选定英雄后，这里展示该英雄的推荐海克斯</div></div>
+        <div id="stHexHeroStat"><div class="msg">🎴 选定英雄后，这里展示该英雄的推荐海克斯</div></div>
       </div>
       <div class="board" id="stHexBoard"></div>
-      <div class="card" style="margin:14px 0 0;border-color:rgba(74,222,128,.25)">
-        <h3 style="color:var(--green)">🏊 共享池推荐 · 英雄选择 <span class="hint">按推荐分排序（胜率70%+登场30%）· 无榜数据排最后</span></h3>
+      <div class="subpanel success-panel">
+        <h3 style="color:var(--green)">🏊 共享英雄池 · 选择推荐 <span class="hint">仅展示 LCU 当前返回的可选英雄，按推荐分排序</span></h3>
         <div class="grid" id="stHexPool"></div>
       </div>
       <div class="row" style="margin:14px 0 0;gap:14px;align-items:stretch">
-        <div class="card" style="flex:1;min-width:0">
+        <div class="subpanel split-panel">
           <h3 style="color:var(--cyan)">🏆 版本英雄榜 Top 8 <span class="hint">选人参考</span></h3>
           <div class="grid" id="stHexRefHeroes" style="margin-top:8px"></div>
         </div>
-        <div class="card" style="flex:1;min-width:0">
+        <div class="subpanel split-panel">
           <h3 style="color:var(--gold)">🤝 最佳拍档 Top 8 <span class="hint">组合胜率</span></h3>
           <div class="grid" id="stHexRefPartners" style="margin-top:8px"></div>
         </div>
@@ -819,7 +699,7 @@
     </div>
 
     <!-- ⑥ 加载动画：10 人卡片 + 进度条 -->
-    <div class="card hidden" id="stLoading">
+    <div class="stage-panel hidden" id="stLoading">
       <h3>🎬 加载画面 <span class="hint">10 名玩家信息 · 进度条满即进入对局</span></h3>
       <div class="load-progress"><div class="load-bar" id="stLoadBar"></div></div>
       <div class="msg hidden" id="stLoadMsg"></div>
@@ -827,129 +707,13 @@
     </div>
 
     <!-- ⑦ 游戏中：当前对局 10 人（KIWI 加载阶段在 InProgress，随时可查） -->
-    <div class="card hidden" id="stGame">
-      <div class="card" style="border-color:rgba(11,198,227,.25)">
+    <div class="stage-panel hidden" id="stGame">
+      <div class="subpanel game-panel">
         <h3 style="color:var(--cyan)">👥 当前对局 10 人 <span class="hint">加载/游戏中实时刷新 · 大乱斗无段位 · 含近期战绩</span></h3>
         <div id="stGamePlayers"><div class="msg">加载中…</div></div>
       </div>
     </div>
   </section>
-
-  <!-- ===== 好友状态（在线好友近期战绩 + 组队建议） ===== -->
-  <section class="tab" id="tab-friends">
-    <div class="card">
-      <h3>👥 在线好友状态 <span class="hint">排位/海斗分类型评估（近15天 · 最多50场）· 上次对局天数 · 30s 自动刷新</span></h3>
-      <div class="msg" id="frMsg">正在检测…</div>
-      <div id="frBody" class="hidden">
-        <div class="row" style="margin-bottom:10px;gap:10px;flex-wrap:wrap">
-          <button class="mini tab-btn active" data-frtab="hextech" onclick="switchFrTab('hextech')">🃏 海斗</button>
-          <button class="mini tab-btn" data-frtab="ranked" onclick="switchFrTab('ranked')">🏆 排位</button>
-          <button class="primary" onclick="loadFriends(true)">🔄 刷新</button>
-          <span class="sub" id="frInfo"></span>
-        </div>
-        <div class="grid" id="frList"></div>
-        <div class="card" style="margin:14px 0 0;border-color:rgba(11,198,227,.2)" id="stFrRecent"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== 海克斯大乱斗（101 三个内页签：英雄榜 / 海克斯榜 / 最佳拍档榜） ===== -->
-  <section class="tab" id="tab-hex">
-    <div class="card">
-      <h3>海克斯大乱斗 <span class="hint">数据源 101.qq.com 官方 · 英雄选择 + 海克斯选择参考</span></h3>
-      <div class="row" style="margin-bottom:14px;flex-wrap:wrap">
-        <button class="mini tab-btn active" data-hextab="heroes" onclick="switchHexTab('heroes')">🏆 英雄榜</button>
-        <button class="mini tab-btn" data-hextab="runes" onclick="switchHexTab('runes')">🃏 海克斯榜</button>
-        <button class="mini tab-btn" data-hextab="partners" onclick="switchHexTab('partners')">🤝 最佳拍档榜</button>
-        <button class="primary" onclick="loadHex()" id="hexBtn" style="margin-left:auto">刷新</button>
-      </div>
-      <div class="grid" id="hexHeroes"></div>
-      <div class="grid hidden" id="hexAugments"></div>
-      <div class="grid hidden" id="hexPartners"></div>
-    </div>
-  </section>
-
-  <!-- ===== Pick 手动 ===== -->
-  <section class="tab" id="tab-pick">
-    <div class="card">
-      <h3>Pick 推荐 <span class="hint">根据对面已选英雄推荐克制选择</span></h3>
-      <div class="row">
-        <input type="text" id="pickEnemy" placeholder="对面英雄，逗号分隔：亚索,盲僧,锤石">
-        <select id="pickLane">
-          <option value="ALL">全位置</option><option value="TOP">上单</option><option value="JUNGLE">打野</option>
-          <option value="MIDDLE">中单</option><option value="BOTTOM">ADC</option><option value="SUPPORT">辅助</option>
-        </select>
-        <select id="pickTier">
-          <option value="255">全段位</option><option value="10">最强王者</option><option value="9">宗师</option>
-          <option value="8">大师</option><option value="7">钻石</option><option value="6">翡翠</option>
-          <option value="5">铂金</option><option value="4">黄金</option><option value="3">白银</option>
-          <option value="2">青铜</option><option value="1">黑铁</option>
-        </select>
-        <button class="primary" onclick="loadPick()">推荐</button>
-      </div>
-      <div class="err" id="pickErr"></div>
-      <div class="grid" id="pickResult" style="margin-top:14px"></div>
-    </div>
-  </section>
-
-  <!-- ===== Ban 手动 ===== -->
-  <section class="tab" id="tab-ban">
-    <div class="card">
-      <h3>Ban 建议 <span class="hint">留空=版本强势榜；填我方英雄=推荐克制我方的</span></h3>
-      <div class="row">
-        <input type="text" id="banMy" placeholder="我方英雄（可空）：薇恩,锤石">
-        <select id="banTier">
-          <option value="255">全段位</option><option value="10">最强王者</option><option value="9">宗师</option>
-          <option value="8">大师</option><option value="7">钻石</option><option value="6">翡翠</option>
-          <option value="5">铂金</option><option value="4">黄金</option><option value="3">白银</option>
-          <option value="2">青铜</option><option value="1">黑铁</option>
-        </select>
-        <button class="primary" onclick="loadBan()">建议</button>
-      </div>
-      <div class="err" id="banErr"></div>
-      <div class="grid" id="banResult" style="margin-top:14px"></div>
-    </div>
-  </section>
-
-  <!-- ===== 榜单 ===== -->
-  <section class="tab" id="tab-rank">
-    <div class="card">
-      <h3>英雄榜单 <span class="hint" id="rankVer"></span></h3>
-      <div class="row" style="margin-bottom:14px">
-        <select id="rankLane">
-          <option value="ALL">全位置</option><option value="TOP">上单</option><option value="JUNGLE">打野</option>
-          <option value="MIDDLE">中单</option><option value="BOTTOM">ADC</option><option value="SUPPORT">辅助</option>
-        </select>
-        <select id="rankTier">
-          <option value="255">全段位</option><option value="10">最强王者</option><option value="9">宗师</option>
-          <option value="8">大师</option><option value="7">钻石</option><option value="6">翡翠</option>
-          <option value="5">铂金</option><option value="4">黄金</option><option value="3">白银</option>
-          <option value="2">青铜</option><option value="1">黑铁</option>
-        </select>
-        <button class="primary" onclick="loadRank()">查看</button>
-      </div>
-      <div class="table-wrap" id="rankResult"></div>
-    </div>
-  </section>
-
-  <!-- ===== 对位克制 ===== -->
-  <section class="tab" id="tab-hero">
-    <div class="card">
-      <h3>对位克制 <span class="hint">某英雄被谁克制 / 克制谁</span></h3>
-      <div class="row">
-        <input type="text" id="heroName" placeholder="英雄名：劫 / Zed / 38">
-        <select id="heroLane">
-          <option value="ALL">全位置</option><option value="TOP">上单</option><option value="JUNGLE">打野</option>
-          <option value="MIDDLE">中单</option><option value="BOTTOM">ADC</option><option value="SUPPORT">辅助</option>
-        </select>
-        <button class="primary" onclick="loadHero()">查询</button>
-      </div>
-      <div class="err" id="heroErr"></div>
-      <div id="heroResult" style="margin-top:14px"></div>
-    </div>
-  </section>
-    </div>
-  </main>
 </div>
 
 <script>
@@ -993,121 +757,35 @@ function banExtra(h) {
   }
   return `禁用率 ${h.banRate.toFixed ? h.banRate.toFixed(1) : h.banRate}%`;
 }
-function chip(alias, name, color) {
-  return `<span class="chip ${color}"><img src="${heroImg(alias)}" onerror="this.style.visibility='hidden'">${esc(name)}</span>`;
-}
-
-/* ---------- tabs ---------- */
-document.querySelectorAll('#tabs button, .tool-nav button').forEach((b) => {
-  b.onclick = () => {
-    document.querySelectorAll('#tabs button, .tool-nav button').forEach((x) => x.classList.remove('active'));
-    document.querySelectorAll('section.tab').forEach((x) => x.classList.remove('active'));
-    b.classList.add('active');
-    $('tab-' + b.dataset.tab).classList.add('active');
-    if ($('pageTitle')) $('pageTitle').textContent = b.dataset.title || b.textContent.trim();
-    if ($('pageSubtitle')) $('pageSubtitle').textContent = b.dataset.subtitle || '';
-    if (b.dataset.tab === 'rank') loadRank();
-    if (b.dataset.tab === 'hex') loadHex();
-    if (b.dataset.tab === 'friends') startFriends();
-  };
-});
-
-/* ---------- 海克斯大乱斗（101 三内页签：英雄榜 / 海克斯榜 / 最佳拍档榜） ---------- */
-function augmentLevelCls(l) { return { kSilver: 'lv-silver', kGold: 'lv-gold', kPrismatic: 'lv-prismatic' }[l] || 'lv-silver'; }
-function augmentLevelName(l) { return { kSilver: '白银', kGold: '黄金', kPrismatic: '棱彩' }[l] || l; }
-
-function switchHexTab(k) {
-  document.querySelectorAll('#tab-hex .tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.hextab === k));
-  $('hexHeroes').classList.toggle('hidden', k !== 'heroes');
-  $('hexAugments').classList.toggle('hidden', k !== 'runes');
-  $('hexPartners').classList.toggle('hidden', k !== 'partners');
-}
-
-function hexAugmentCardHTML(a) {
-  return `<div class="aug-card">
-    <span class="rank-tag">胜率榜 #${a.winRank}</span>
-    <img class="icon" src="${a.augment.small_Icon}" onerror="this.style.visibility='hidden'">
-    <div class="name">${esc(a.augment.name_cn)} <span class="sub2 ${augmentLevelCls(a.augment.level)}">${augmentLevelName(a.augment.level)}</span></div>
-    <div class="win ${winCls(a.winRate)}">${a.winRate.toFixed(2)}%</div>
-    <div class="sub2">出场 ${a.pickRate.toFixed(2)}% · ${esc(a.augment.tooltip || '')}</div>
-    ${a.bestHeroes.length ? `<div class="heroes">适合: ${a.bestHeroes.map(esc).join('、')}</div>` : ''}
-  </div>`;
-}
-
-function partnerCardHTML(p) {
-  return `<div class="hero-card">
-    <span class="rank">${p.winRate.toFixed(1)}%</span>
-    <div style="display:flex;justify-content:center;gap:6px;align-items:center">
-      <img src="${heroImg(p.heroAlias)}" style="width:40px;height:40px;border-radius:8px;object-fit:cover" onerror="this.style.visibility='hidden'">
-      <span style="color:var(--gold)">＋</span>
-      <img src="${heroImg(p.partnerAlias)}" style="width:40px;height:40px;border-radius:8px;object-fit:cover" onerror="this.style.visibility='hidden'">
-    </div>
-    <div class="name">${esc(p.heroTitle)} + ${esc(p.partnerTitle)}</div>
-    <div class="win ${winCls(p.winRate)}">${p.winRate.toFixed(2)}%</div>
-    <div class="counters">组合登场 ${p.pickRate.toFixed(2)}%</div>
-  </div>`;
-}
-
-async function loadHex() {
-  const [heroes, augments, partners] = await Promise.all([
-    api('hex/heroes', { top: 16 }),
-    api('hex/augments', { top: 16 }),
-    api('hex/partners', { top: 16 }),
-  ]);
-  $('hexHeroes').innerHTML = heroes.map((h) => `<div class="hero-card">
-    <span class="rank">#${h.rank}</span>
-    <img src="${heroImg(h.alias)}" onerror="this.style.visibility='hidden'">
-    <div class="name">${esc(h.title)}</div>
-    <div class="win ${winCls(h.winRate)}">${h.winRate.toFixed(2)}%</div>
-    <div class="counters">登场 ${h.pickRate.toFixed(2)}%</div>
-    ${h.bestAugments.length ? `<div class="counters" style="color:var(--gold)">🃏 ${h.bestAugments.slice(0,2).map((a) => esc(a.name_cn)).join('、')}</div>` : ''}
-  </div>`).join('') || '<div class="msg">加载失败</div>';
-  $('hexAugments').innerHTML = augments.map(hexAugmentCardHTML).join('') || '<div class="msg">加载失败</div>';
-  $('hexPartners').innerHTML = partners.map(partnerCardHTML).join('') || '<div class="msg">加载失败</div>';
-}
-
 /* ---------- LCU 状态轮询 ---------- */
-// 阶段写入防回退：只有“最新一次”请求的结果允许写回 curPhase（renderStage 与 lcuStatus 共用序号），
-// 并做 in-flight 去重——防止慢请求乱序返回把阶段倒退回选人，导致加载阶段还显示 pick。
+// 阶段渲染循环统一读取状态：顶部状态和内容视图共用一次请求，避免两个 3 秒轮询互相覆盖。
 let phaseSeq = 0;
 let lcuStatusBusy = false;
-let lastPhase = 'None';
-
 async function lcuStatus() {
-  if (lcuStatusBusy) return;
+  if (lcuStatusBusy) return curPhase;
   lcuStatusBusy = true;
-  const seq = ++phaseSeq;
   try {
     const s = await api('lcu/status');
-    if (seq < phaseSeq) return; // 已有更新的阶段结果（renderStage 也在查），丢弃过期响应
-    const dot = $('lcuDot'), txt = $('lcuText');
+    const dot = $('lcuDot'), txt = $('lcuText'), badge = $('phaseBadge');
     if (s.connected) {
-      const prev = curPhase;
-      curPhase = s.phase; // 记录当前阶段（Lobby/ChampSelect/GameStart/InProgress...）
-      // 我方对局刚结束（InProgress/加载 → 结算/大厅）：好友/队友刚打完一把，立即刷新战绩
-      if ((prev === 'InProgress' || prev === 'GameStart') && ['EndOfGame', 'WaitingForStats', 'None', 'Lobby'].includes(curPhase)) {
-        onGameEnded();
-      }
-      lastPhase = curPhase;
+      curPhase = s.phase;
       dot.className = 'dot on';
       txt.textContent = `已连接${s.summoner ? ' · ' + s.summoner + (s.level ? ` (${s.level}级)` : '') : ''}`;
-      const badge = $('phaseBadge');
       const phaseText = { None: '大厅', Lobby: '房间', Matchmaking: '匹配中', ChampSelect: '选人中', GameStart: '加载中', InProgress: '对局中', WaitingForStats: '结算中', Reconnect: '重连中' }[s.phase] || s.phase;
       badge.textContent = '⏱ ' + phaseText;
       badge.classList.remove('hidden');
     } else {
       curPhase = 'None';
-      lastPhase = curPhase;
       dot.className = 'dot off';
       txt.textContent = '客户端未连接';
-      $('phaseBadge').classList.add('hidden');
+      badge.classList.add('hidden');
     }
-  } catch (e) { /* ignore */ }
+  } catch { /* 客户端启动/重启瞬间保持上一次内容 */ }
   finally { lcuStatusBusy = false; }
+  return curPhase;
 }
 
 /* ---------- BP 助手（对局流程视图） ---------- */
-let stageTimer = null;
 let curPhase = 'None'; // 由 lcuStatus 更新：Lobby/ChampSelect/GameStart/InProgress...
 const LANE_CN = { TOP: '上单', JUNGLE: '打野', MIDDLE: '中单', BOTTOM: '下路', SUPPORT: '辅助', UTILITY: '辅助', none: '?', fill: '补位', NONE: '?', FILL: '补位' };
 
@@ -1123,36 +801,22 @@ function slotHTML(p, d) {
   </div>`;
 }
 
-/** ban 槽位（固定 5 格） */
-function banSlotsHTML(bans, d, color) {
-  const slots = [];
-  for (let i = 0; i < 5; i++) {
-    const id = bans[i] || 0;
-    slots.push(id > 0
-      ? `<span class="chip ${color}"><img src="${heroImg(d.heroAliases[id] || '')}" onerror="this.style.visibility='hidden'">${esc(d.heroNames[id] || id)}</span>`
-      : '<span class="chip" style="opacity:.3">—</span>');
-  }
-  return slots.join('');
-}
-
-/** 海斗翻牌格子：未翻开 = 卡背，已翻开 = 英雄头像 + 进池标记（兼容 championIds 数组形态） */
+/** 海斗当前选人：棋盘只展示玩家已经选定的英雄，不将其当作共享池 */
 function hexFlipHTML(p, d) {
-  const cards = (p.championIds || []).filter((id) => id > 0);
-  const flippedId = p.championId > 0 ? p.championId : cards[0] || 0;
-  const flipped = flippedId > 0;
-  return `<div class="slot ${p.isMe ? 'me' : ''} ${flipped ? 'flipped' : ''}">
-    ${flipped
-      ? `<img src="${heroImg(d.heroAliases[flippedId] || '')}" onerror="this.style.visibility='hidden'"><span class="tag" style="background:var(--gold);color:#1a1205">已翻开${cards.length > 1 ? ` ×${cards.length}` : ''}</span>`
-      : '<div class="cardback">🂠</div>'}
+  const selected = p.championId > 0;
+  return `<div class="slot ${p.isMe ? 'me' : ''} ${selected ? 'flipped' : ''}">
+    ${selected
+      ? `<img src="${heroImg(d.heroAliases[p.championId] || '')}" onerror="this.style.visibility='hidden'"><span class="tag" style="background:var(--gold);color:#1a1205">已选定</span>`
+      : '<div class="cardback">?</div>'}
     <div class="nm">${esc(p.summonerName)}${p.isMe ? ' (我)' : ''}</div>
-    <div class="ln">${flipped ? '进入共享池' : '翻牌中…'}</div>
+    <div class="ln">${selected ? '已从共享池选定' : '待选择…'}</div>
   </div>`;
 }
 
 /** 海斗共享池推荐卡片（英雄选择推荐：推荐序号 + 综合分 + 胜率 + 推荐牌 + 最佳搭档） */
 function hexPoolCard(h) {
   return `<div class="hero-card">
-    <span class="rank">${h.isMine ? '🌟 ' : ''}#${h.rank}${h.rank === 1 && h.score !== null ? ' 推荐' : ''}</span>
+    <span class="rank">#${h.rank}${h.rank === 1 && h.score !== null ? ' 推荐' : ''}</span>
     <img src="${heroImg(h.alias)}" onerror="this.style.visibility='hidden'">
     <div class="name">${esc(h.title)}</div>
     <div class="win ${winCls(h.winRate)}">${h.winRate !== null ? h.winRate.toFixed(2) + '%' : '—'}</div>
@@ -1166,7 +830,6 @@ function hexPoolCard(h) {
 }
 
 /* ---------- 对局主视图：按真实流程阶段驱动（房间→匹配→接受→禁用→选人→加载→游戏） ---------- */
-const STAGE_ORDER = ['room', 'queue', 'accept', 'ban', 'pick', 'load', 'game'];
 /** 流程条按模式区分：排位有禁用，海斗无禁用（翻牌替代）；匹配/接受两阶段共用 */
 const FLOWS = {
   normal: [['room', '1 房间'], ['queue', '2 匹配'], ['accept', '3 接受'], ['ban', '4 BAN'], ['pick', '5 PICK'], ['load', '6 加载'], ['game', '7 游戏']],
@@ -1216,7 +879,7 @@ const PICK_ROUNDS = [
   { label: 'B5', team: 'blue', start: 9, end: 10 },
 ];
 
-async function renderIdle(phase) {
+async function renderIdle() {
   showStage('idle');
   setFlow(flowKey, ''); // 回到空闲：流程条不保留任何高亮
   $('stPhase').textContent = '—';
@@ -1318,7 +981,6 @@ function loadMemberRecent(entry, force = false) {
     key: `r:${entry.summonerId}:${lobbyData?.queueId ?? ''}`,
     id: entry.summonerId,
     name: entry.name,
-    isFriend: false,
     queueId: lobbyData?.queueId ?? '',
     modeLabel: lobbyData?.modeLabel ?? '',
     force,
@@ -1383,7 +1045,6 @@ async function renderChampSelect(obsolete = () => false) {
     ? `第 ${d.completedActions + 1}/${d.totalActions} 手 · ${act.isAlly ? '🔵我方' : '🔴对面'} ${LANE_CN[act.lane] || act.lane || ''} ${act.actorName} 正在${act.type === 'ban' ? '禁用' : '选择'}${act.isMe ? ' ← 轮到你！' : ''}`
     : `已操作 ${d.completedActions}/${d.totalActions} 手`;
 
-  const isRanked = d.mode === 'ranked_solo' || d.mode === 'ranked_flex';
   const isHex = d.mode === 'hextech_aram';
   if (isHex) {
     // 海斗：翻牌（只显示我方翻牌区）+ 共享池推荐（英雄选择推荐）+ 版本英雄榜/拍档参考（流程条无禁用）
@@ -1394,13 +1055,13 @@ async function renderChampSelect(obsolete = () => false) {
     if (st && d.myHeroId > 0) {
       setHtml('stHexHeroStat', heroStatHTML(st));
     } else {
-      setHtml('stHexHeroStat', '<div class="msg">🎴 翻牌/选定英雄后，这里展示该英雄的推荐海克斯</div>');
+      setHtml('stHexHeroStat', '<div class="msg">🎴 选定英雄后，这里展示该英雄的推荐海克斯</div>');
     }
     $('stHexBoard').innerHTML = d.myTeamBoard.map((p) => hexFlipHTML(p, d)).join('');
     const pool = d.aramPool || [];
     $('stHexPool').innerHTML = pool.length
       ? pool.map(hexPoolCard).join('')
-      : '<div class="msg">🎴 队友还在翻牌 — 翻开的英雄进池后自动推荐</div>';
+      : '<div class="msg">🎴 LCU 尚未返回共享英雄池</div>';
     loadHexRefs();
     return;
   }
@@ -1471,13 +1132,8 @@ async function renderGame(obsolete = () => false) {
  */
 async function renderStage(force = false) {
   if (!force && !$('autoRefresh').checked) return;
-  let phase = curPhase;
-  const seq = ++phaseSeq; // 本轮渲染的权威阶段请求（比它新的结果出现 → 本轮作废）
-  try {
-    const s = await api('lcu/status').catch(() => null);
-    if (s && s.connected && seq >= phaseSeq) { curPhase = s.phase; phase = s.phase; }
-    else if (seq >= phaseSeq) curPhase = 'None';
-  } catch { /* 保留上次阶段 */ }
+  const phase = await lcuStatus();
+  const seq = ++phaseSeq;
   const obsolete = () => seq < phaseSeq || curPhase !== phase; // 渲染期间阶段已变化 → 丢弃过期结果
   try {
     if (phase === 'Lobby') { await renderLobby(obsolete); return; }
@@ -1499,7 +1155,7 @@ async function renderStage(force = false) {
     }
     if (phase === 'GameStart') { await renderLoading(obsolete); return; }
     if (phase === 'InProgress') { await renderGame(obsolete); return; }
-    await renderIdle(phase);
+    await renderIdle();
   } catch (e) {
     // 客户端短暂不可用 → 空闲视图，不打断轮询
     if (!obsolete()) await renderIdle();
@@ -1514,7 +1170,7 @@ function startStage() {
       // 渲染异常绝不终止轮询（否则阶段永远停住）
     }
     first = false;
-    stageTimer = setTimeout(loop, 3000);
+    setTimeout(loop, 3000);
   };
   loop();
 }
@@ -1533,8 +1189,22 @@ function heroStatHTML(st) {
   ${partners ? `<div style="margin-top:8px;font-size:12px;color:var(--dim)">🤝 最佳搭档 <span class="sub">与该英雄同队时的组合胜率</span>:</div><div class="chips" style="margin-top:6px">${partners}</div>` : ''}`;
 }
 
+/** 海斗拍档卡片（翻牌阶段参考） */
+function partnerCardHTML(p) {
+  return `<div class="hero-card">
+    <span class="rank">${p.winRate.toFixed(1)}%</span>
+    <div style="display:flex;justify-content:center;gap:6px;align-items:center">
+      <img src="${heroImg(p.heroAlias)}" style="width:40px;height:40px;border-radius:8px;object-fit:cover" onerror="this.style.visibility='hidden'">
+      <span style="color:var(--gold)">＋</span>
+      <img src="${heroImg(p.partnerAlias)}" style="width:40px;height:40px;border-radius:8px;object-fit:cover" onerror="this.style.visibility='hidden'">
+    </div>
+    <div class="name">${esc(p.heroTitle)} + ${esc(p.partnerTitle)}</div>
+    <div class="win ${winCls(p.winRate)}">${p.winRate.toFixed(2)}%</div>
+    <div class="counters">组合登场 ${p.pickRate.toFixed(2)}%</div>
+  </div>`;
+}
+
 /* ---------- 海克斯选牌推荐（Web 直接展示：自动按我方阵容评级 + 官方牌榜） ---------- */
-let augRecoTimer = null;
 /* ---------- 海斗翻牌阶段参考：版本英雄榜 + 最佳拍档（10 分钟节流） ---------- */
 let hexRefTs = 0;
 function loadHexRefs(force = false) {
@@ -1561,121 +1231,42 @@ function loadHexRefs(force = false) {
   });
 }
 
-/* ---------- Pick 手动 ---------- */
-async function loadPick() {
-  const btn = event.target; btn.disabled = true;
-  $('pickErr').textContent = '';
-  $('pickResult').innerHTML = '<div class="msg"><span class="loading-spin"></span> 分析中…</div>';
-  try {
-    const recs = await api('pick', { enemy: $('pickEnemy').value, lane: $('pickLane').value, tier: $('pickTier').value, top: 12 });
-    $('pickResult').innerHTML = recs.length
-      ? recs.map((h) => heroCard(h, { rank: h.rank, extra: pickExtra(h) })).join('')
-      : '<div class="msg">没有推荐结果，检查英雄名是否正确</div>';
-  } catch (e) {
-    $('pickErr').textContent = '❌ ' + e.message;
-    $('pickResult').innerHTML = '';
-  } finally { btn.disabled = false; }
-}
-
-/* ---------- Ban 手动 ---------- */
-async function loadBan() {
-  const btn = event.target; btn.disabled = true;
-  $('banErr').textContent = '';
-  $('banResult').innerHTML = '<div class="msg"><span class="loading-spin"></span> 分析中…</div>';
-  try {
-    const recs = await api('ban', { my: $('banMy').value, tier: $('banTier').value, top: 12 });
-    $('banResult').innerHTML = recs.map((h) => heroCard(h, { rank: h.rank, extra: banExtra(h) })).join('');
-  } catch (e) {
-    $('banErr').textContent = '❌ ' + e.message;
-    $('banResult').innerHTML = '';
-  } finally { btn.disabled = false; }
-}
-
-/* ---------- 榜单 ---------- */
-async function loadRank() {
-  const wrap = $('rankResult');
-  wrap.innerHTML = '<div class="msg"><span class="loading-spin"></span> 加载中…</div>';
-  try {
-    const [rows, versions] = await Promise.all([api('rank', { lane: $('rankLane').value, tier: $('rankTier').value, top: 60 }), api('versions')]);
-    $('rankVer').textContent = `版本 ${versions[0]?.name ?? ''} · 国服`;
-    const laneName = { TOP: '上单', JUNGLE: '打野', MIDDLE: '中单', BOTTOM: 'ADC', SUPPORT: '辅助', ALL: '全部' }[$('rankLane').value];
-    const tierName = $('rankTier').selectedOptions[0].textContent;
-    wrap.innerHTML = `<table>
-      <thead><tr><th style="width:52px">排名</th><th>英雄</th><th>位置</th><th>强度</th><th class="num">胜率</th><th class="num">登场率</th><th class="num">禁用率</th><th style="width:60px">变化</th></tr></thead>
-      <tbody>${rows.map((r) => `<tr>
-        <td>${r.rank}</td>
-        <td class="hero"><img src="${heroImg(r.alias)}" onerror="this.style.visibility='hidden'">${esc(r.title)}</td>
-        <td class="sub">${r.lane}</td>
-        <td><span class="tier-badge ${tierCls(r.tier)}">${esc(r.tier)}</span></td>
-        <td class="num ${winCls(r.winRate)}">${r.winRate.toFixed(2)}%</td>
-        <td class="num">${r.pickRate.toFixed(2)}%</td>
-        <td class="num">${r.banRate.toFixed(2)}%</td>
-        <td class="sub">${r.rankChange === 0 ? '-' : r.rankChange < 0 ? '↑' + (-r.rankChange) : '↓' + r.rankChange}</td>
-      </tr>`).join('')}</tbody></table>
-      <div class="sub" style="margin-top:8px">${laneName} · ${tierName}</div>`;
-  } catch (e) {
-    wrap.innerHTML = `<div class="msg">❌ ${esc(e.message)}</div>`;
-  }
-}
-
-/* ---------- 对位克制 ---------- */
-async function loadHero() {
-  const btn = event.target; btn.disabled = true;
-  $('heroErr').textContent = '';
-  $('heroResult').innerHTML = '<div class="msg"><span class="loading-spin"></span> 查询中…</div>';
-  try {
-    const d = await api('hero', { name: $('heroName').value, lane: $('heroLane').value });
-    const laneName = $('heroLane').selectedOptions[0].textContent;
-    $('heroResult').innerHTML = `
-      <div class="row" style="margin-bottom:14px"><img src="${heroImg(d.alias)}" style="width:44px;height:44px;border-radius:10px">
-        <span style="font-size:17px;font-weight:700">${esc(d.title)}</span><span class="sub">${laneName} 对位数据</span></div>
-      <div class="card" style="margin:0 0 12px;border-color:rgba(248,113,113,.3)">
-        <h3 style="color:var(--red)">克制 ${esc(d.title)}（对面选它时你选这些）</h3>
-        <div class="grid">${d.high.length ? d.high.map((h) => heroCard(h, { rank: h.rank })).join('') : '<div class="msg">无数据</div>'}</div>
-      </div>
-      <div class="card" style="margin:0;border-color:rgba(74,222,128,.3)">
-        <h3 style="color:var(--green)">被 ${esc(d.title)} 克制</h3>
-        <div class="grid">${d.low.length ? d.low.map((h) => heroCard(h, { rank: h.rank })).join('') : '<div class="msg">无数据</div>'}</div>
-      </div>`;
-  } catch (e) {
-    $('heroErr').textContent = '❌ ' + e.message;
-    $('heroResult').innerHTML = '';
-  } finally { btn.disabled = false; }
-}
-
 /* ---------- 加载画面（并入对局流程视图） ---------- */
 /** 10 人加载表格（普通模式/KIWI 共用；大乱斗无段位列，全部带近期战绩） */
 function loadingTableHTML(d) {
   const teams = [100, 200];
   const phaseTxt = d.phase === 'InProgress' ? '游戏中' : '加载中';
-  // 大乱斗系（海克斯/普通）无排位段位：服务端已跳过 10 人段位查询，前端也不显示段位列
-  const rankCol = d.aramLike ? '' : '<th>段位</th>';
-  const rankCell = (p) => (d.aramLike ? '' : `<td>${esc(p.rank || '-')}</td>`);
-  // 近期战绩：按当前模式族取（大乱斗→海斗战绩；排位→排位战绩）；无数据显示最近对局天数
+  // 近期战绩按当前模式族取；加载阶段保持单列，避免 400px 面板横向滚动。
   const recentCell = (p) => {
     const r = p.recents;
     if (!r) return '<span class="sub">—</span>';
     const x = d.aramLike ? r.hextech : r.ranked;
     if (x && x.totalGames > 0) {
       const cls = x.score >= 60 ? 'var(--green)' : x.score >= 50 ? 'var(--gold)' : 'var(--red)';
-      return `<span class="sub">${x.totalGames}场 · 胜率 <b>${x.winRate.toFixed(0)}%</b> · KDA ${x.kda} · <b style="color:${cls}">${x.score}分</b></span>`;
+      return `<span class="player-recent">${x.totalGames}场 · ${x.winRate.toFixed(0)}% · KDA ${x.kda} · <b style="color:${cls}">${x.score}分</b></span>`;
     }
-    return `<span class="sub">${r.overallLastDays !== null && r.overallLastDays !== undefined ? `上次 ${r.overallLastDays} 天前` : '近15天无战绩'}</span>`;
+    return `<span class="player-recent">${r.overallLastDays !== null && r.overallLastDays !== undefined ? `上次 ${r.overallLastDays} 天前` : '近15天无战绩'}</span>`;
   };
-  return `<div class="sub" style="margin-bottom:8px">模式: ${esc(d.gameMode)} · ${phaseTxt}${d.aramLike ? ' · 大乱斗无段位' : ''} · 含双方近期战绩</div>` +
+  const playerRow = (p, team) => {
+    const avatar = p.isBot
+      ? '<span class="player-avatar">BOT</span>'
+      : `<span class="player-avatar"><img src="${heroImg(p.alias)}" onerror="this.style.visibility='hidden'"></span>`;
+    const rank = d.aramLike ? '' : `<span class="player-rank">${esc(p.rank || '未定级')}</span>`;
+    return `<div class="player-row ${team === 100 ? 'blue' : 'red'} ${p.isMe ? 'self' : ''}">
+      ${avatar}
+      <div class="player-main">
+        <div class="player-name">${esc(p.summonerName)}${p.isMe ? ' · 我' : ''}${p.isBot ? ' · 人机' : ''}</div>
+        <div class="player-hero">${esc(p.title)} · ${esc(p.position || '位置未知')} · Lv.${p.summonerLevel || '-'}</div>
+      </div>
+      <div class="player-meta">${rank}${p.isBot ? '<span class="player-recent">无需战绩</span>' : recentCell(p)}</div>
+    </div>`;
+  };
+  return `<div class="sub" style="margin-bottom:8px">${esc(d.gameMode)} · ${phaseTxt}${d.aramLike ? ' · 大乱斗无段位' : ''} · 实时同步</div>` +
     teams.map((team, ti) => {
       const ps = d.players.filter((p) => p.teamId === team);
       if (!ps.length) return '';
-      return `<div class="team-header ${ti === 0 ? 'blue' : 'red'}">${ti === 0 ? '🔵 我方' : '🔴 对面'}</div>
-      <table><thead><tr><th>召唤师</th><th>英雄</th><th>位置</th>${rankCol}<th>近期战绩</th><th class="num">等级</th></tr></thead>
-      <tbody>${ps.map((p) => `<tr>
-        <td>${esc(p.summonerName)}${p.isBot ? ' 🤖' : ''}</td>
-        <td class="hero">${p.isBot ? esc(p.title) : `<img src="${heroImg(p.alias)}" onerror="this.style.visibility='hidden'">${esc(p.title)}`}</td>
-        <td class="sub">${esc(p.position || '-')}</td>
-        ${rankCell(p)}
-        <td>${p.isBot ? '<span class="sub">人机</span>' : recentCell(p)}</td>
-        <td class="num">${p.summonerLevel || '-'}</td>
-      </tr>`).join('')}</tbody></table>`;
+      return `<div class="team-header ${ti === 0 ? 'blue' : 'red'}">${ti === 0 ? '🔵 我方' : '🔴 对面'} <span class="sub">${ps.length} 人</span></div>
+        <div class="player-list">${ps.map((p) => playerRow(p, team)).join('')}</div>`;
     }).join('');
 }
 
@@ -1697,13 +1288,7 @@ async function loadLoading(force = false) {
   }
 }
 
-/* ---------- 在线好友状态（近期战绩 + 组队建议 + 逐场明细） ---------- */
-let frTimer = null;
-let friendsData = null;
-let selFriendId = null;
-let lastFriendsFp = '';
-const FR_STATUS = { chat: '🟢 在线', away: '🟡 离开', mobile: '📱 移动端', dnd: '🔴 勿扰', in_game: '🎮 游戏中', in_queue: '⏳ 排队中', unknown: '⚪ 未知' };
-/** 逐场战绩行（房间/好友共用）：点击展开详细战绩（自己的对局可看完整 10 人；好友对局仅本人数据） */
+/* ---------- 逐场战绩明细（房间/加载共用） ---------- */
 function recentDetailHTML(r) {
   const fmt = (n) => (n || 0).toLocaleString();
   const dur = r.duration > 0 ? `${Math.floor(r.duration / 60)}分${String(r.duration % 60).padStart(2, '0')}秒` : '';
@@ -1786,7 +1371,7 @@ function recentPanelHTML(name, stats, recent, refreshBtn = '', byType = null, mo
 }
 
 /**
- * 明细懒加载（房间/好友共用）：
+ * 明细懒加载（房间共用）：
  * - 会话内缓存 60s：重复点选不重复请求，直接渲染
  * - in-flight 去重：同一目标的并发请求只发一次
  * - 竞态保护：返回后校验当前选中项，避免快速切换时旧数据覆盖新面板
@@ -1800,27 +1385,21 @@ const RECENT_PANEL_TTL_MS = 60_000;
 function clearRecentCache(pred) {
   for (const k of recentPanelCache.keys()) if (pred(k)) recentPanelCache.delete(k);
 }
-async function loadRecentPanel({ key, id, name, isFriend, queueId = '', modeLabel = '', mode = '', force = false }) {
-  const target = isFriend ? $('stFrRecent') : $('stRecent');
-  const selAtCall = isFriend ? selFriendId : selMemberId;
+async function loadRecentPanel({ key, id, name, queueId = '', modeLabel = '', force = false }) {
+  const target = $('stRecent');
+  const selAtCall = selMemberId;
   const hit = recentPanelCache.get(key);
   if (!force && hit && Date.now() - hit.ts < RECENT_PANEL_TTL_MS) {
-    if (selAtCall === (isFriend ? selFriendId : selMemberId)) target.innerHTML = hit.html;
+    if (selAtCall === selMemberId) target.innerHTML = hit.html;
     return;
   }
   target.innerHTML = `<h3>📋 ${esc(name)} 近期战绩 <span class="hint">查询中…</span></h3>`;
   let p = recentPanelInflight.get(key);
   if (!p) {
     p = (async () => {
-      const params = isFriend ? { puuid: id, mode: mode || '' } : { summonerId: id, queueId: queueId || '' };
-      const d = await api('player-recent', params);
-      const btn = isFriend
-        ? '<button class="mini" onclick="refreshFriendRecent()">🔄 刷新</button>'
-        : '<button class="mini" onclick="refreshMemberRecent()">🔄 刷新</button>';
-      // 好友：按页签模式只查该模式（海斗/排位最多 20 场），不显示类型摘要；房间保持排位+海斗合并 + 类型摘要
-      const firstType = isFriend ? mode : queueFamilyOf(Number(queueId) || 0);
-      const modeHint = isFriend ? (mode === 'hextech' ? '海斗' : '排位') : '';
-      const html = recentPanelHTML(name, isFriend ? null : d.stats, d.recent || [], btn, d.byType, modeLabel, firstType, !isFriend, modeHint);
+      const d = await api('player-recent', { summonerId: id, queueId: queueId || '' });
+      const btn = '<button class="mini" onclick="refreshMemberRecent()">🔄 刷新</button>';
+      const html = recentPanelHTML(name, d.stats, d.recent || [], btn, d.byType, modeLabel, queueFamilyOf(Number(queueId) || 0), true);
       recentPanelCache.set(key, { ts: Date.now(), html });
       return html;
     })().finally(() => recentPanelInflight.delete(key));
@@ -1828,178 +1407,44 @@ async function loadRecentPanel({ key, id, name, isFriend, queueId = '', modeLabe
   }
   try {
     const html = await p;
-    if (selAtCall === (isFriend ? selFriendId : selMemberId)) target.innerHTML = html;
+    if (selAtCall === selMemberId) target.innerHTML = html;
   } catch (e) {
-    if (selAtCall === (isFriend ? selFriendId : selMemberId)) {
+    if (selAtCall === selMemberId) {
       target.innerHTML = `<h3>📋 ${esc(name)} 近期战绩</h3><div class="msg">❌ ${esc(e.message)}</div>`;
     }
   }
 }
-function frCard(f, sel, mode) {
-  // mode: 'hextech' | 'ranked' —— 页签决定只显示对应模式的数据
-  const v = f.stats;
-  const x = v?.[mode];
-  const lastDays = mode === 'hextech' ? v?.hextechLastDays : v?.rankedLastDays;
-  const enough = (x?.totalGames ?? 0) >= 3;
-  const border = x ? (enough ? (x.score >= 60 ? 'good' : x.score >= 50 ? 'mid' : 'bad') : 'mid') : 'mid';
-  const tagCls = (s) => (s >= 60 ? 'tag-good' : s >= 50 ? 'tag-mid' : 'tag-bad');
-  const wrColor = (wr) => (wr >= 50 ? 'var(--green)' : wr >= 45 ? 'var(--gold)' : 'var(--red)');
-  const label = mode === 'hextech' ? '海斗' : '排位';
-  const icon = mode === 'hextech' ? '🃏' : '🏆';
-  return `<div class="fr-card ${border} ${sel ? 'sel' : ''}" style="cursor:pointer" onclick="selectFriend('${esc(f.puuid)}')" title="点击查看近期战绩明细">
-    <div class="fr-head">
-      <img class="avatar" src="${f.icon ? `https://game.gtimg.cn/images/lol/act/img/profileicon/${f.icon}.png` : ''}" onerror="this.style.visibility='hidden'">
-      <div class="fr-info">
-        <div class="nm">${esc(f.name)}</div>
-        <div class="fr-line"><span class="st fr-status-${f.status}">${FR_STATUS[f.status] || '⚪ 未知'}${f.gameLabel ? ' · ' + esc(f.gameLabel) : ''}</span></div>
-        <div class="fr-line fr-tier">${[f.tier, f.level ? `Lv.${f.level}` : ''].filter(Boolean).join(' · ') || '段位未知'}</div>
-      </div>
-    </div>
-    ${x
-      ? `<div class="mode-stat" style="grid-column:1/-1">
-          <div class="ms-title"><span>${icon} ${label}</span><span>${x.totalGames} 场</span></div>
-          <div class="ms-win" style="color:${wrColor(x.winRate)}">${x.winRate.toFixed(0)}%</div>
-          <div class="ms-sub">KDA ${x.kda}${lastDays !== null && lastDays !== undefined ? ` · 上次对局 ${lastDays} 天前` : ''}</div>
-          <span class="ms-tag ${tagCls(x.score)}">${esc(x.verdict)}${enough ? ` ${x.score}分` : ''}</span>
-        </div>`
-      : `<div class="mode-stat" style="grid-column:1/-1">
-          <div class="ms-title"><span>${icon} ${label}</span></div>
-          <div class="ms-win" style="color:var(--dim)">—</div>
-          <div class="ms-sub">${lastDays !== null && lastDays !== undefined ? `上次对局 ${lastDays} 天前` : '近15天无记录'}</div>
-        </div>`}
-  </div>`;
-}
-function selectFriend(puuid) {
-  selFriendId = puuid;
-  if (!friendsData) return;
-  $('frList').innerHTML = friendsData.friends.map((f) => frCard(f, f.puuid === puuid, frModeTab)).join('');
-  loadFriendRecent();
-}
-/** 好友明细懒加载：按当前页签模式只查该模式战绩（key 含模式，切页签自动重查）；force 强制重查 */
-function loadFriendRecent(force = false) {
-  const f = (friendsData?.friends ?? []).find((x) => x.puuid === selFriendId);
-  if (!f) { $('stFrRecent').innerHTML = ''; return; }
-  loadRecentPanel({ key: `f:${f.puuid}:${frModeTab}`, id: f.puuid, name: f.name, isFriend: true, mode: frModeTab, force });
-}
-
-function refreshFriendRecent() {
-  const f = (friendsData?.friends ?? []).find((x) => x.puuid === selFriendId);
-  if (f) loadRecentPanel({ key: `f:${f.puuid}:${frModeTab}`, id: f.puuid, name: f.name, isFriend: true, mode: frModeTab, force: true });
-}
-let friendsLoading = false;
-async function loadFriends(force = false) {
-  if (!force && !$('autoRefresh').checked) return;
-  if (friendsLoading) return; // in-flight 去重（30s 轮询与对局结束触发可能重叠）
-  friendsLoading = true;
-  try {
-    const d = await api('friends');
-    // 性能：无变化跳过重渲染（30s 轮询）；手动刷新（force）仍重渲染列表 + 强制重查明细
-    const fp = JSON.stringify([d.count, ...d.friends.map((f) => [f.puuid, f.status, f.gameLabel, f.stats?.ranked?.score, f.stats?.hextech?.score, f.stats?.ranked?.winRate, f.stats?.hextech?.winRate])]);
-    if (fp === lastFriendsFp && friendsData) {
-      if (force) { renderFrList(); loadFriendRecent(true); }
-      return;
-    }
-    lastFriendsFp = fp;
-    // 战绩摘要/状态有更新：清掉好友逐场明细缓存，60s 内点开也强制重查（避免“打完一把战绩不更新”）
-    clearRecentCache((k) => k.startsWith('f:'));
-    friendsData = d;
-    $('frMsg').classList.add('hidden');
-    $('frBody').classList.remove('hidden');
-    renderFrList();
-    loadFriendRecent();
-  } catch (e) {
-    $('frMsg').textContent = '❌ ' + e.message;
-    $('frMsg').classList.remove('hidden');
-    $('frBody').classList.add('hidden');
-  } finally {
-    friendsLoading = false;
-  }
-}
-
-/** 我方对局结束（EndOfGame/结算/回大厅）：好友/队友刚打完一把，立即刷新战绩 */
-function onGameEnded() {
-  if (friendsData) loadFriends(true);
-}
-
-/* 好友状态页签：海斗 / 排位排序（localStorage 记忆上次选择） */
-let frModeTab = localStorage.getItem('frTab') === 'ranked' ? 'ranked' : 'hextech'; // hextech | ranked
-function switchFrTab(k) {
-  frModeTab = k;
-  localStorage.setItem('frTab', k);
-  document.querySelectorAll('#tab-friends .tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.frtab === k));
-  renderFrList();
-  loadFriendRecent(); // 页签模式变了，明细按新模式重新查询
-}
-function renderFrList() {
-  if (!friendsData) return;
-  const list = [...(friendsData.friends ?? [])].sort((a, b) => {
-    const s = (x) => (frModeTab === 'hextech' ? x?.stats?.hextech : x?.stats?.ranked);
-    const va = s(a)?.score ?? -1;
-    const vb = s(b)?.score ?? -1;
-    return vb - va;
-  });
-  $('frInfo').textContent = `${list.length} 位在线好友 · ${frModeTab === 'hextech' ? '海斗' : '排位'}评估排序${frModeTab === 'hextech' ? ' 🃏' : ' 🏆'}`;
-  $('frList').innerHTML = list.length
-    ? list.map((f) => frCard(f, f.puuid === selFriendId, frModeTab)).join('')
-    : '<div class="msg">当前没有在线好友</div>';
-}
-function startFriends() {
-  loadFriends(true);
-  if (frTimer) clearInterval(frTimer);
-  frTimer = setInterval(() => loadFriends(), 30000);
-}
-
 /* ---------- init ---------- */
-setInterval(lcuStatus, 3000);
-lcuStatus();
 startStage();
-startFriends();
-// 好友页签：按记忆的选择同步按钮高亮（HTML 默认海斗）
-if (frModeTab !== 'hextech') {
-  document.querySelectorAll('#tab-friends .tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.frtab === frModeTab));
-}
-document.querySelector('#rankLane').addEventListener('change', loadRank);
-document.querySelector('#rankTier').addEventListener('change', loadRank);
-['pickEnemy', 'banMy', 'heroName'].forEach((id) => {
-  $(id).addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      if (id === 'pickEnemy') loadPick();
-      if (id === 'banMy') loadBan();
-      if (id === 'heroName') loadHero();
-    }
-  });
-});
 
-/* ===== 侧边停靠面板（?side=1 + Tauri 壳） ===== */
-if (document.body.classList.contains('side')) {
-  const SIDE_TAURI = window.__TAURI__;
-  const run = (p) => Promise.resolve(p).catch(() => {});
-  // 非 Tauri 环境（普通浏览器）下隐藏面板按钮
-  if (!SIDE_TAURI) {
-    const pt = document.querySelector('.panel-tools');
-    if (pt) pt.remove();
-  }
-  // 顶部条拖拽移动（无边框窗口）：按住非按钮区域拖动
-  const sidebar = document.querySelector('.sidebar');
-  if (sidebar) {
-    sidebar.addEventListener('mousedown', (e) => {
-      if (e.target.closest('button')) return;
-      if (SIDE_TAURI) run(SIDE_TAURI.window.getCurrentWindow().startDragging());
-    });
-  }
-  if (SIDE_TAURI) {
-    const $b = (id) => document.getElementById(id);
-    const dockBtn = $b('panelDock');
-    let docked = true;
-    const syncDock = () => { if (dockBtn) dockBtn.classList.toggle('on', docked); };
-    run(SIDE_TAURI.core.invoke('dock_status').then((v) => { docked = !!v; syncDock(); }));
-    const on = (id, fn) => { const el = $b(id); if (el) el.onclick = () => run(fn()); };
-    on('panelArrange', () => SIDE_TAURI.core.invoke('arrange_windows'));
-    on('panelDock', () => SIDE_TAURI.core.invoke('set_docked', { enabled: !docked }).then((v) => { docked = !!v; syncDock(); }));
-    on('panelRefresh', () => location.reload());
-    on('panelClose', () => SIDE_TAURI.window.getCurrentWindow().close());
-    syncDock();
-  }
+/* ===== 侧边停靠面板（Tauri 壳） ===== */
+const SIDE_TAURI = window.__TAURI__;
+const run = (p) => Promise.resolve(p).catch(() => {});
+// 非 Tauri 环境（浏览器直开）下隐藏面板按钮
+if (!SIDE_TAURI) {
+  const pt = document.querySelector('.panel-tools');
+  if (pt) pt.remove();
+}
+// 顶部条拖拽移动（无边框窗口）：按住非按钮/输入区拖动
+const topbar = document.querySelector('.topbar');
+if (topbar) {
+  topbar.addEventListener('mousedown', (e) => {
+    if (e.target.closest('button, input, label')) return;
+    if (SIDE_TAURI) run(SIDE_TAURI.window.getCurrentWindow().startDragging());
+  });
+}
+if (SIDE_TAURI) {
+  const $b = (id) => document.getElementById(id);
+  const dockBtn = $b('panelDock');
+  let docked = true;
+  const syncDock = () => { if (dockBtn) dockBtn.classList.toggle('on', docked); };
+  run(SIDE_TAURI.core.invoke('dock_status').then((v) => { docked = !!v; syncDock(); }));
+  const on = (id, fn) => { const el = $b(id); if (el) el.onclick = () => run(fn()); };
+  on('panelArrange', () => SIDE_TAURI.core.invoke('arrange_windows'));
+  on('panelDock', () => SIDE_TAURI.core.invoke('set_docked', { enabled: !docked }).then((v) => { docked = !!v; syncDock(); }));
+  on('panelRefresh', () => location.reload());
+  on('panelClose', () => SIDE_TAURI.window.getCurrentWindow().close());
+  syncDock();
 }
 </script>
 </body>

@@ -1,6 +1,6 @@
 // T101 对局助手 · 侧边停靠面板（Tauri 2 壳）
-// - 无边框 / 置顶 / 跳过任务栏 的 WebView 窗口，加载本地 t101 Web 服务
-// - 停靠：找到 LOL 游戏/客户端主窗口，面板贴其右侧；窗口铺满屏时浮于右缘
+// - 无边框 / 普通窗口层级 / 跳过任务栏 的 WebView 窗口，加载本地 t101 Web 服务
+// - 停靠：找到 LOL 游戏/客户端主窗口，面板贴其右侧并保持普通窗口层级；窗口铺满屏时浮于右缘
 // - F9 一键排布（游戏左 2/3，面板右 1/3）· F10 停靠开关 · F12 退出
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -27,13 +27,11 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 const SERVER_HOST: &str = "127.0.0.1";
-const SERVER_PORT: u16 = 8765;
+const SERVER_PORT: u16 = 7892;
 /// 跟随模式下面板宽度
 const PANEL_W: i32 = 400;
 /// 面板与目标窗口的间距
 const MARGIN: i32 = 8;
-/// 排布模式下面板最大宽度
-const ARRANGE_MAX_W: i32 = 560;
 
 const HOTKEY_ARRANGE: i32 = 0x1001;
 const HOTKEY_DOCK: i32 = 0x1002;
@@ -100,10 +98,24 @@ unsafe extern "system" fn enum_windows(hwnd: HWND, lparam: LPARAM) -> windows::c
         let _ = unsafe { CloseHandle(handle) };
         if ok.is_ok() {
             let name = String::from_utf16_lossy(&buf[..len as usize]).to_ascii_lowercase();
-            if name.ends_with("league of legends.exe") {
-                targets.game = Some(hwnd);
-            } else if name.ends_with("leagueclientux.exe") {
-                targets.client = Some(hwnd);
+            let is_game = name.ends_with("league of legends.exe");
+            let is_client = name.ends_with("leagueclientux.exe");
+            if is_game || is_client {
+                // 客户端进程有多个顶层窗口（主窗口 + 大量不可见辅助窗口），
+                // 只保留“可用”窗口（可见、未最小化、尺寸>100），否则会选中不可见窗口导致停靠失效
+                let vis = unsafe { IsWindowVisible(hwnd) }.as_bool();
+                let icon = unsafe { IsIconic(hwnd) }.as_bool();
+                let mut r = RECT::default();
+                let big = unsafe { GetWindowRect(hwnd, &mut r) }.is_ok()
+                    && r.right - r.left > 100
+                    && r.bottom - r.top > 100;
+                if vis && !icon && big {
+                    if is_game {
+                        targets.game = Some(hwnd);
+                    } else {
+                        targets.client = Some(hwnd);
+                    }
+                }
             }
         }
     }
@@ -222,7 +234,7 @@ fn apply_dock(dock: &Dock, forced: bool) {
 }
 
 /// F9 / 面板按钮：一键排布
-/// - 目标未铺满屏（桌面客户端/窗口化游戏）：目标窗口左 2/3，面板占右 1/3（右对齐，上限 560px）
+/// - 目标未铺满屏（桌面客户端/窗口化游戏）：目标窗口铺满工作区剩余区域，面板固定 400px 贴右
 /// - 目标已铺满屏（游戏中无边框全屏/最大化）：**不动游戏窗口**，面板仅贴工作区右缘悬浮（对局中只看战绩）
 fn arrange(dock: &Dock) {
     let Some(panel) = *dock.panel.lock().unwrap() else {
@@ -251,10 +263,11 @@ fn arrange(dock: &Dock) {
         set_window_pos(panel, wa.right - PANEL_W - MARGIN, wa.top, PANEL_W, wh, true);
         return;
     }
-    let gw = ww * 2 / 3;
-    let remaining = ww - gw - MARGIN;
-    let pw = remaining.min(ARRANGE_MAX_W).max(320);
-    let px = wa.left + gw + MARGIN + (remaining - pw); // 右对齐
+    // 面板保持固定宽度，避免停靠线程下一拍又把“排布”宽度改回 400px。
+    // 目标窗口占满剩余空间，面板留出小间距贴在右侧。
+    let pw = PANEL_W;
+    let gw = (ww - pw - MARGIN * 2).max(320);
+    let px = wa.left + gw + MARGIN;
     set_window_pos(target, wa.left, wa.top, gw, wh, false);
     set_window_pos(panel, px, wa.top, pw, wh, true);
 }
@@ -267,7 +280,7 @@ fn server_waiter(dock: Arc<Dock>, win: tauri::WebviewWindow) {
         let up = TcpStream::connect_timeout(&addr, Duration::from_millis(400)).is_ok();
         if up {
             std::thread::sleep(Duration::from_millis(400)); // 让服务先应答
-            let url: tauri::Url = format!("http://{SERVER_HOST}:{SERVER_PORT}/?side=1")
+            let url: tauri::Url = format!("http://{SERVER_HOST}:{SERVER_PORT}/")
                 .parse()
                 .unwrap();
             if win.navigate(url).is_ok() {

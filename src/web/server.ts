@@ -247,12 +247,12 @@ async function handleApi(route: string, params: URLSearchParams, res: ServerResp
           ? (await recommendHextechHeroes(300).catch(() => [])).find((h) => h.heroId === analysis.myHeroId) ?? null
           : null;
         // JSON 无法序列化函数：把 heroName/heroAlias 换成 id -> 名字/别名映射（前端 chip 头像用 alias）
-        // 海斗：共享池（含对面翻开的卡）与翻牌区（championIds 数组）的英雄也要有别名
+        // 海斗：共享池与双方当前已选英雄都要有别名
         const ids = new Set([
           ...analysis.myPicks, ...analysis.enemyPicks, ...analysis.myBans, ...analysis.enemyBans,
           ...(analysis.aramPool ?? []).map((h) => h.heroId),
-          ...analysis.myTeamBoard.flatMap((p) => [p.championId, ...(p.championIds ?? [])]),
-          ...analysis.enemyTeamBoard.flatMap((p) => [p.championId, ...(p.championIds ?? [])]),
+          ...analysis.myTeamBoard.map((p) => p.championId),
+          ...analysis.enemyTeamBoard.map((p) => p.championId),
         ]);
         const heroNames: Record<number, string> = {};
         const heroAliases: Record<number, string> = {};
@@ -348,6 +348,7 @@ async function handleApi(route: string, params: URLSearchParams, res: ServerResp
             title: pl.isBot ? '人机' : heroDisplayName(heroes.get(pl.championId), pl.championId),
             alias: pl.isBot ? '' : heroes.get(pl.championId)?.alias ?? '',
             rank: ranked.get(pl.summonerId) ?? '',
+            isMe: pl.puuid === me?.puuid,
             recents: recents.get(pl.summonerId) ?? null,
           })),
         });

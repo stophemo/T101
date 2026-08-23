@@ -33,7 +33,7 @@ export interface ChampSelectAnalysis {
   bans: BanRecommendation[];
   /** 海克斯/大乱斗英雄推荐（仅 aram 模式） */
   aramHeroes?: Awaited<ReturnType<typeof recommendHextechHeroes>>;
-  /** 海克斯大乱斗共享池：我方翻开的英雄（进池后全员可选），按胜率排序（仅 hextech_aram） */
+  /** 海克斯大乱斗共享池：LCU session.benchChampions 返回的全体可选英雄（仅 hextech_aram） */
   aramPool: AramPoolEntry[];
   /** 生效段位 id（LCU 自动获取，默认 255 全段位） */
   tier: number;
@@ -72,14 +72,12 @@ export interface BoardPlayer {
   summonerName: string;
   lane: string;
   championId: number;
-  /** 海克斯大乱斗：该玩家翻开的全部卡（部分客户端字段形态） */
-  championIds?: number[];
   isMe: boolean;
   /** 是否当前操作者（正在 ban/pick） */
   acting: boolean;
 }
 
-/** 海克斯大乱斗共享池中的英雄（翻开的英雄，带胜率/海克斯牌，标注是否自己翻的） */
+/** 海克斯大乱斗共享池中的英雄（来自 LCU session.benchChampions，带胜率/海克斯牌） */
 export interface AramPoolEntry {
   heroId: number;
   title: string;
@@ -94,8 +92,6 @@ export interface AramPoolEntry {
   bestAugments: { name_cn: string; winRate: number }[];
   /** 最佳搭档（组合胜率，百分比） */
   bestPartners: { title: string; winRate: number }[];
-  /** 是否自己翻开（自己的卡牌） */
-  isMine: boolean;
 }
 
 /** 海斗共享池英雄综合推荐分（0-100，数据驱动）：胜率 70% + 登场率 30%；无榜数据为 null */
@@ -106,30 +102,18 @@ export function aramPoolScore(winRate: number | null, pickRate: number | null): 
   return Math.round(wr * 0.7 + pr * 0.3);
 }
 
-/** 取一名玩家翻开的英雄（兼容 LCU 字段形态：championId 单值 / championIds 数组） */
-function flippedHeroIds(p: { championId: number; championIds?: number[] }): number[] {
-  const ids = new Set<number>();
-  for (const id of p.championIds ?? []) if (id > 0) ids.add(id);
-  if (p.championId > 0) ids.add(p.championId);
-  return [...ids];
-}
-
 /**
- * 构建海克斯大乱斗共享池：双方已翻开（championId>0 / championIds）的英雄去重，
- * 匹配胜率榜数据（无榜数据的补空），按胜率降序。
- * 海斗共享池为 10 人共用：我方 + 对面翻开的卡都会进池，全员可选。
+ * 构建海克斯大乱斗共享池：只读取 LCU session.benchChampions 返回的候选英雄。
+ * 注意：myTeam/theirTeam 的 championId 是玩家当前选定/锁定的英雄，不能当作共享池。
  */
 export function buildAramPool(
-  myTeam: { cellId: number; championId: number; championIds?: number[] }[],
-  theirTeam: { cellId: number; championId: number; championIds?: number[] }[],
-  localPlayerCellId: number,
+  benchChampions: { championId: number }[],
   heroes: ReadonlyMap<number, { heroId: number; name: string; title: string; alias: string }>,
   aramHeroes: Awaited<ReturnType<typeof recommendHextechHeroes>>,
 ): AramPoolEntry[] {
-  const flipped = [...myTeam, ...theirTeam].flatMap(flippedHeroIds);
-  const mine = new Set(flippedHeroIds(myTeam.find((p) => p.cellId === localPlayerCellId) ?? { championId: 0 }));
+  const ids = [...new Set(benchChampions.map((item) => item.championId))].filter((id) => id > 0);
   const rankMap = new Map(aramHeroes.map((h) => [h.heroId, h]));
-  return [...new Set(flipped)]
+  return ids
     .map((id) => {
       const r = rankMap.get(id);
       const h = heroes.get(id);
@@ -144,10 +128,9 @@ export function buildAramPool(
         score: aramPoolScore(winRate, pickRate),
         bestAugments: (r?.bestAugments ?? []).map((a) => ({ name_cn: a.name_cn, winRate: a.winRate })),
         bestPartners: (r?.bestPartners ?? []).slice(0, 3).map((p) => ({ title: p.title, winRate: p.winRate })),
-        isMine: mine.has(id),
       };
     })
-    .sort((a, b) => (b.score ?? -1) - (a.score ?? -1)) // 有分在前按分降序，榜外（无分）排最后
+    .sort((a, b) => (b.score ?? -1) - (a.score ?? -1))
     .map((entry, i) => ({ ...entry, rank: i + 1 }));
 }
 
@@ -236,7 +219,6 @@ export async function analyzeChampSelect(): Promise<ChampSelectAnalysis> {
         summonerName: nameOf(p),
         lane: p.assignedPosition ?? '',
         championId: p.championId,
-        championIds: p.championIds,
         isMe: p.cellId === session.localPlayerCellId,
         acting: pending?.actorCellId === p.cellId,
       }));
@@ -271,7 +253,7 @@ export async function analyzeChampSelect(): Promise<ChampSelectAnalysis> {
     picks,
     bans,
     aramHeroes,
-    aramPool: isHextechMode(mode) ? buildAramPool(session.myTeam, session.theirTeam, session.localPlayerCellId, heroes, aramHeroes) : [],
+    aramPool: isHextechMode(mode) ? buildAramPool(session.benchChampions ?? [], heroes, aramHeroes) : [],
     tier,
     tierName: TIER_NAMES[tier] ?? '全段位',
     timerPhase: TIMER_PHASE_NAMES[session.timer.phase] ?? session.timer.phase,

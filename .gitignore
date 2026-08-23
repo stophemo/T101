@@ -8,7 +8,6 @@ build/
 
 desktop/src-tauri/target/
 desktop/src-tauri/gen/
-scripts/icon.png
 
 desktop/dist/*
 !desktop/dist/index.html
