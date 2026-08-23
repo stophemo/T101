@@ -1,6 +1,11 @@
 // 101.qq.com 官方数据接口客户端（国服）
 // 已实测验证：https://mlol.qt.qq.com 免 Key 免鉴权
+// 缓存策略：
+//   - 榜单/对位/拍档/分段：按「版本号」存快照（同一版本内数据不变，版本变更才重拉）
+//   - 海克斯/大乱斗：按「日期」存快照（当天数据生成后不再变化，保留历史）
+//   - 版本列表/英雄表/海克斯牌表：滚动 TTL 缓存（cache.ts）
 import { cacheGet, cacheSet } from '../utils/cache.js';
+import { snapshotGet, snapshotSet } from '../utils/snapshot.js';
 import type { AugmentInfo, ChampionBase, ChampionStat, ConfrontStats, HextechHeroStat, HextechRuneStat, Lane, PartnerInfo, SegmentStat, TierId } from '../models.js';
 
 export type { TierId } from '../models.js';
@@ -38,7 +43,7 @@ async function get<T>(path: string, params: Record<string, string | number>): Pr
 export async function getVersions(force = false): Promise<VersionInfo[]> {
   const key = 'versions';
   if (!force) {
-    const hit = cacheGet<VersionInfo[]>(key, 24);
+    const hit = cacheGet<VersionInfo[]>(key, 6);
     if (hit) return hit;
   }
   const res = await fetch(`${BASE}/go/database/versionlist?zone=lol&from=h5`, { headers: HEADERS });
@@ -86,8 +91,8 @@ export async function getChampionRankings(opts: RankOptions = {}, force = false)
   const lane = opts.lane ?? 'ALL';
   const key = `rankings:${tier}:${lane}:${version}`;
   if (!force) {
-    const hit = cacheGet<ChampionStat[]>(key, 6);
-    if (hit) return hit;
+    const hit = snapshotGet<ChampionStat[]>(key);
+    if (hit) return hit.data;
   }
   const raw = await get<string>('/go/battle_info/odp_proxy/lol_101strategy', {
     itier: tier, version_id: version, lane, sort_metric: 1, sort_order: 2, zone: 'lol', from: 'h5',
@@ -101,7 +106,7 @@ export async function getChampionRankings(opts: RankOptions = {}, force = false)
     parsed = parseDatadetails(raw);
   }
   if (parsed.length === 0) throw new Error('榜单数据解析失败');
-  cacheSet(key, parsed);
+  snapshotSet(key, parsed, { source: '101:lol_101strategy', version, count: parsed.length });
   return parsed;
 }
 
@@ -118,8 +123,8 @@ export async function getConfront(heroId: number, opts: RankOptions = {}, force 
   if (lane === 'ALL') throw new Error('对位数据必须指定具体位置（TOP/JUNGLE/MIDDLE/BOTTOM/SUPPORT）');
   const key = `confront:${heroId}:${tier}:${lane}:${version}`;
   if (!force) {
-    const hit = cacheGet<ConfrontStats>(key, 24);
-    if (hit) return hit;
+    const hit = snapshotGet<ConfrontStats>(key);
+    if (hit) return hit.data;
   }
   const raw = await get<string>('/go/battle_info/odp_proxy/lol_101strategy_confront', {
     itier: tier, championid: heroId, lane, version_id: version, zone: 'lol', from: 'h5',
@@ -136,7 +141,7 @@ export async function getConfront(heroId: number, opts: RankOptions = {}, force 
     low = parse(obj.low_op_details ?? '');
   }
   const result = { high, low };
-  cacheSet(key, result);
+  snapshotSet(key, result, { source: '101:lol_101strategy_confront', version, count: high.length + low.length });
   return result;
 }
 
@@ -148,8 +153,8 @@ export async function getPartner(heroId: number, opts: RankOptions = {}, force =
   if (lane === 'ALL') throw new Error('拍档数据必须指定具体位置（TOP/JUNGLE/MIDDLE/BOTTOM/SUPPORT）');
   const key = `partner:${heroId}:${tier}:${lane}:${version}`;
   if (!force) {
-    const hit = cacheGet<PartnerInfo[]>(key, 24);
-    if (hit) return hit;
+    const hit = snapshotGet<PartnerInfo[]>(key);
+    if (hit) return hit.data;
   }
   const raw = await get<string>('/go/battle_info/odp_proxy/lol_101strategy_partner', {
     itier: tier, championid: heroId, lane, version_id: version, zone: 'lol', from: 'h5',
@@ -165,7 +170,7 @@ export async function getPartner(heroId: number, opts: RankOptions = {}, force =
       wins: parseInt(wins ?? '0', 10),
     };
   });
-  cacheSet(key, result);
+  snapshotSet(key, result, { source: '101:lol_101strategy_partner', version, count: result.length });
   return result;
 }
 
@@ -193,7 +198,7 @@ export async function getSegment(heroId: number, opts: RankOptions = {}, force =
       banRate: parseFloat(banRate),
     };
   });
-  cacheSet(key, result);
+  snapshotSet(key, result, { source: '101:lol_101strategy_segment', version, count: result.length });
   return result;
 }
 
@@ -249,20 +254,20 @@ function parseAramHeroList(raw: string): HextechHeroStat[] {
   });
 }
 
-/** 海克斯大乱斗英雄榜 */
+/** 海克斯大乱斗英雄榜（按日期快照：当天数据生成后不再变化） */
 export async function getHextechHeroRank(dtstatdate?: string, force = false): Promise<HextechHeroStat[]> {
   const fetchRaw = async (date: string) => {
     const key = `hex_hero:${date}`;
     if (!force) {
-      const hit = cacheGet<HextechHeroStat[]>(key, 12);
-      if (hit) return hit;
+      const hit = snapshotGet<HextechHeroStat[]>(key);
+      if (hit) return hit.data;
     }
     const raw = await get<string>('/go/battle_info/odp_proxy/fuwen_aram_hero_rank_v2', { dtstatdate: date });
     if (!raw) return null;
     const obj = JSON.parse(raw) as { listcollect?: string };
     const parsed = parseAramHeroList(obj.listcollect ?? '');
     if (parsed.length === 0) return null;
-    cacheSet(key, parsed);
+    snapshotSet(key, parsed, { source: '101:fuwen_aram_hero_rank_v2', date, count: parsed.length });
     return parsed;
   };
   const date = dtstatdate ?? await resolveDate(async (d) => !!(await fetchRaw(d)));
@@ -271,13 +276,13 @@ export async function getHextechHeroRank(dtstatdate?: string, force = false): Pr
   return hit;
 }
 
-/** 海克斯牌榜：按胜率排序（选牌推荐） */
+/** 海克斯牌榜：按胜率排序（选牌推荐）（按日期快照） */
 export async function getHextechRuneRank(dtstatdate?: string, force = false): Promise<HextechRuneStat[]> {
   const fetchRaw = async (date: string) => {
     const key = `hex_rune:${date}`;
     if (!force) {
-      const hit = cacheGet<HextechRuneStat[]>(key, 12);
-      if (hit) return hit;
+      const hit = snapshotGet<HextechRuneStat[]>(key);
+      if (hit) return hit.data;
     }
     const raw = await get<string>('/go/battle_info/odp_proxy/fuwen_aram_rune_rank_v2', { dtstatdate: date, augmentid_level: 255 });
     if (!raw) return null;
@@ -296,7 +301,7 @@ export async function getHextechRuneRank(dtstatdate?: string, force = false): Pr
       };
     });
     if (parsed.length === 0) return null;
-    cacheSet(key, parsed);
+    snapshotSet(key, parsed, { source: '101:fuwen_aram_rune_rank_v2', date, count: parsed.length });
     return parsed;
   };
   const date = dtstatdate ?? await resolveDate(async (d) => !!(await fetchRaw(d)));
@@ -305,20 +310,20 @@ export async function getHextechRuneRank(dtstatdate?: string, force = false): Pr
   return hit;
 }
 
-/** 普通大乱斗英雄榜 */
+/** 普通大乱斗英雄榜（按日期快照） */
 export async function getAramHeroRank(dtstatdate?: string, force = false): Promise<HextechHeroStat[]> {
   const fetchRaw = async (date: string) => {
     const key = `aram_hero:${date}`;
     if (!force) {
-      const hit = cacheGet<HextechHeroStat[]>(key, 12);
-      if (hit) return hit;
+      const hit = snapshotGet<HextechHeroStat[]>(key);
+      if (hit) return hit.data;
     }
     const raw = await get<string>('/go/battle_info/odp_proxy/aram_hero_overview', { dtstatdate: date });
     if (!raw) return null;
     const obj = JSON.parse(raw) as { listcollect?: string };
     const parsed = parseAramHeroList(obj.listcollect ?? '');
     if (parsed.length === 0) return null;
-    cacheSet(key, parsed);
+    snapshotSet(key, parsed, { source: '101:aram_hero_overview', date, count: parsed.length });
     return parsed;
   };
   const date = dtstatdate ?? await resolveDate(async (d) => !!(await fetchRaw(d)));

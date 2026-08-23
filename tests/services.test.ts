@@ -5,7 +5,7 @@ import { computeBanRecommendations } from '../src/services/ban.js';
 import { computePickRecommendations, inferLane, normalizeLane } from '../src/services/pick.js';
 import { buildAramPool } from '../src/services/champselect.js';
 import { gradeAugmentChoices } from '../src/services/augments.js';
-import { evaluateRecentStats, evaluateTeam } from '../src/services/player.js';
+import { evaluateRecentStats, evaluateTeam, evaluateByType, evaluateModeStats } from '../src/services/player.js';
 import { tierNameToId, TIER_NAMES, type ChampionBase, type ChampionStat } from '../src/models.js';
 
 // ---------- 测试数据 ----------
@@ -179,7 +179,7 @@ test('ban 场景 B：无威胁数据时降级为版本梯度榜', () => {
 
 // ---------- 海克斯大乱斗共享池 ----------
 
-test('buildAramPool：翻开的英雄进池去重、按胜率排序、标注自己翻的', () => {
+test('buildAramPool：双方翻开的卡都进共享池、去重、按胜率排序、标注自己翻的', () => {
   const myTeam = [
     { cellId: 1, championId: 7 },   // 我：菲兹
     { cellId: 2, championId: 6 },   // 队友：盖伦
@@ -187,26 +187,47 @@ test('buildAramPool：翻开的英雄进池去重、按胜率排序、标注自�
     { cellId: 4, championId: 0 },   // 还没翻
     { cellId: 5, championId: 0 },   // 还没翻
   ];
+  // 对面翻开的卡：盲僧(2)、菲兹(7)重复、安妮(1)+亚索(5)（championIds 数组形态）
+  const theirTeam = [
+    { cellId: 101, championId: 2 },
+    { cellId: 102, championId: 7 },
+    { cellId: 103, championId: 0, championIds: [1, 5] },
+    { cellId: 104, championId: 0 },
+    { cellId: 105, championId: 0 },
+  ];
   const aramHeroes = [
     { heroId: 6, title: '盖伦', alias: 'Garen', winRate: 49.2, pickRate: 10, rank: 2, bestAugments: [], bestPartners: [] },
     { heroId: 7, title: '菲兹', alias: 'Fizz', winRate: 52.8, pickRate: 8, rank: 1, bestAugments: [], bestPartners: [] },
+    { heroId: 2, title: '盲僧', alias: 'LeeSin', winRate: 51, pickRate: 12, rank: 3, bestAugments: [], bestPartners: [] },
   ];
-  const pool = buildAramPool(myTeam, 1, heroes, aramHeroes);
-  assert.equal(pool.length, 2);                    // 去重后 2 个
-  assert.equal(pool[0].heroId, 7);                 // 菲兹胜率更高排第一
+  const pool = buildAramPool(myTeam, theirTeam, 1, heroes, aramHeroes);
+  assert.equal(pool.length, 5);                    // 我方 2 + 对面 3（菲兹去重）
+  assert.equal(pool[0].heroId, 7);                 // 菲兹 52.8% 综合分最高排第一
   assert.equal(pool[0].isMine, true);              // 我翻的
-  assert.equal(pool[1].isMine, false);
-  assert.equal(pool[1].heroId, 6);
+  assert.equal(pool[0].rank, 1);                   // 推荐序号
+  // 综合分：菲兹 (52.8-45)*8=62.4 -> 62.4*0.7 + 8*6*0.3=48*0.3 -> 62.4*0.7+48*0.3=58.08 -> 58
+  assert.equal(pool[0].score, 58);
+  const ids = pool.map((p) => p.heroId);
+  assert.deepEqual([...ids].sort(), [1, 2, 5, 6, 7]);          // 对面卡也进池（安妮/盲僧/亚索）
+  assert.equal(pool.find((p) => p.heroId === 2)?.isMine, false); // 对面翻的不算我的
+  // 排序：盲僧(51%+12%) 应高于盖伦(49.2%+10%)；安妮/亚索无榜数据排最后
+  const idx = (id: number) => ids.indexOf(id);
+  assert.ok(idx(2) < idx(6), '盲僧分高于盖伦');
+  assert.ok(idx(6) < idx(1) && idx(6) < idx(5), '有数据英雄在无数据之前');
+  assert.equal(pool[3].score, null);               // 亚索无榜数据
+  assert.equal(pool[4].score, null);               // 安妮无榜数据（榜外排最后）
 });
 
 test('buildAramPool：榜外英雄补空胜率，未翻牌为空池', () => {
   const poolEmpty = buildAramPool(
     [{ cellId: 1, championId: 0 }, { cellId: 2, championId: 0 }],
+    [{ cellId: 101, championId: 0 }],
     1, heroes, [],
   );
   assert.deepEqual(poolEmpty, []);
   const pool = buildAramPool(
     [{ cellId: 1, championId: 1 }, { cellId: 2, championId: 0 }],
+    [],
     1, heroes, [], // 安妮不在榜内
   );
   assert.equal(pool.length, 1);
@@ -251,7 +272,8 @@ test('evaluateRecentStats：胜率+KDA 评分与结论', () => {
     queueId: number; win: boolean; gameId: number; championId: number; gameCreation: number; kills: number; deaths: number; assists: number; duration: number;
   }[] = []) => ({
     summonerId: 1, name: 'x', icon: null, totalGames: total, wins,
-    kda: { kills, deaths, assists }, recent,
+    kda: { kills, deaths, assists },
+    recent: recent.map((r) => ({ cs: 0, gold: 0, vision: 0, level: 0, dmg: 0, taken: 0, items: [], augments: [], ...r })),
   });
   // 状态火热：8胜2负 KDA 4.0
   const hot = evaluateRecentStats(mk(8, 10, 20, 5, 20));
@@ -269,6 +291,68 @@ test('evaluateRecentStats：胜率+KDA 评分与结论', () => {
   ]), 420);
   assert.equal(withMode.modeGames, 4);
   assert.equal(withMode.modeWinRate, 50);
+});
+
+test('evaluateByType：按排位/海斗分类评估 + 上次对局天数（15 天窗口）', () => {
+  const now = Date.now();
+  const row = (gameId: number, queueId: number, win: boolean, agoMs: number) => ({
+    gameId, championId: 1, win, gameCreation: now - agoMs, queueId, kills: 3, deaths: 1, assists: 3, duration: 1000,
+    cs: 0, gold: 0, vision: 0, level: 0, dmg: 0, taken: 0, items: [], augments: [],
+  });
+  const stats = {
+    summonerId: 1, name: 'x', icon: null, totalGames: 7, wins: 5, kda: { kills: 21, deaths: 7, assists: 21 },
+    recent: [
+      row(1, 420, true, 3600_000), row(2, 420, false, 7200_000), row(3, 420, true, 3 * 3600_000),    // 排位 3 场
+      row(4, 2400, true, 2 * 86400_000), row(5, 2400, false, 5 * 86400_000),                          // 海斗 2 场
+      row(6, 2400, true, 12 * 86400_000),                                                             // 海斗 12 天前（15 天内）
+      row(7, 420, true, 20 * 86400_000),                                                              // 20 天前（窗口外，排除）
+    ],
+  };
+  const r = evaluateByType(stats);
+  assert.equal(r.ranked?.totalGames, 3);
+  assert.equal(r.ranked?.winRate, 66.7);
+  assert.equal(r.hextech?.totalGames, 3);
+  assert.equal(r.hextech?.winRate, 66.7);
+  assert.equal(r.rankedLastDays, 0);
+  assert.equal(r.hextechLastDays, 2);
+  assert.equal(r.overallLastDays, 0);
+  // 15 天内仅 1 场排位：评估存在但样本不足，给出上次排位距今天数
+  const r2 = evaluateByType({ ...stats, recent: [row(10, 420, true, 12 * 86400_000)] });
+  assert.equal(r2.ranked?.totalGames, 1);
+  assert.equal(r2.ranked?.verdict, '📊 样本不足');
+  assert.equal(r2.rankedLastDays, 12);
+  assert.equal(r2.hextech, null);
+  assert.equal(r2.hextechLastDays, null);
+  // 15 天内无任何对局：两类均为 null
+  const r3 = evaluateByType({ ...stats, recent: [row(11, 420, true, 20 * 86400_000)] });
+  assert.equal(r3.ranked, null);
+  assert.equal(r3.rankedLastDays, null);
+  assert.equal(r3.overallLastDays, null);
+});
+
+test('evaluateModeStats：按当前队列取对应类型评估（排位/海斗）', () => {
+  const now = Date.now();
+  const row = (queueId: number, win: boolean, agoMs: number) => ({
+    gameId: 1, championId: 1, win, gameCreation: now - agoMs, queueId, kills: 2, deaths: 1, assists: 2, duration: 1000,
+    cs: 0, gold: 0, vision: 0, level: 0, dmg: 0, taken: 0, items: [], augments: [],
+  });
+  const stats = {
+    summonerId: 1, name: 'x', icon: null, totalGames: 4, wins: 2, kda: { kills: 8, deaths: 4, assists: 8 },
+    recent: [
+      row(420, true, 3600_000), row(420, false, 7200_000),
+      row(2400, true, 3 * 3600_000), row(2400, true, 4 * 3600_000),
+    ],
+  };
+  // 单双排/灵活排：取排位组评估
+  const r = evaluateModeStats(stats, 420);
+  assert.equal(r?.totalGames, 2);
+  assert.equal(r?.winRate, 50);
+  const r2 = evaluateModeStats(stats, 440);
+  assert.equal(r2?.totalGames, 2);
+  // 海克斯大乱斗：取海斗组评估
+  const h = evaluateModeStats(stats, 2400);
+  assert.equal(h?.totalGames, 2);
+  assert.equal(h?.winRate, 100);
 });
 
 test('evaluateTeam：整体评估与最好/需留意', () => {

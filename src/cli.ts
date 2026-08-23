@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 // t101 — 英雄联盟国服 BP 助手
 import { execSync } from 'node:child_process';
 import http from 'node:http';
@@ -10,8 +10,10 @@ if (process.platform === 'win32') {
 }
 
 import { Command, InvalidArgumentError } from 'commander';
-import { getChampionRankings, getHeroList, getVersions, resolveHeroes, getConfront, type TierId } from './api/cn101.js';
-import { findLcuConnection, getGameflowPhase, getGameflowSession, getRankedStats, KNOWN_QUEUE_IDS } from './api/lcu.js';
+import { getChampionRankings, getHeroList, getVersions, resolveHeroes, getConfront, getAugmentList, getHextechHeroRank, getHextechRuneRank, getAramHeroRank, daysAgo, type TierId } from './api/cn101.js';
+import { snapshotGet, snapshotList, snapshotClear, SNAPSHOT_DIR } from './utils/snapshot.js';
+import { getOpggChampionRankings, getOpggChampionRankingsCached, matchOpggToHero, normalizeOpggPosition, type OpggChampionStat } from './api/opgg.js';
+import { findLcuConnection, getGameflowPhase, getGameflowSession, getRankedStats, getSummoner, getCurrentSummoner, summonerDisplayName, KNOWN_QUEUE_IDS } from './api/lcu.js';
 import { analyzeChampSelect } from './services/champselect.js';
 import { heroDisplayName, TIER_NAMES } from './models.js';
 import { recommendPick, inferLane } from './services/pick.js';
@@ -26,6 +28,10 @@ function parseTier(v: string): TierId {
   if (!Number.isInteger(n) || n < 1 || n > 255) throw new InvalidArgumentError('段位 id 需为 1~255（255=全段位）');
   return n as TierId;
 }
+
+/** sync 全量段位/位置清单 */
+const ALL_TIERS: TierId[] = [255, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+const ALL_LANES = ['ALL', 'TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'SUPPORT'] as const;
 
 program
   .name('t101')
@@ -238,10 +244,10 @@ program
         if (isHex) {
           println('\n🎴 海克斯大乱斗：无 Ban 阶段，翻牌进共享池，全员可选');
           if (a.aramPool.length) {
-            println(`🏊 当前共享池（已翻开 ${a.aramPool.length} 个，按胜率排序）:`);
+            println(`🏊 当前共享池（已翻开 ${a.aramPool.length} 个，按推荐分排序）:`);
             printTable(
-              [{ header: '#', align: 'right' }, { header: '英雄' }, { header: '胜率', align: 'right' }, { header: '登场率', align: 'right' }, { header: '推荐海克斯牌' }, { header: '备注' }],
-              a.aramPool.map((h, i) => [i + 1, h.title, h.winRate !== null ? pct(h.winRate) : '—', h.pickRate !== null ? pct(h.pickRate) : '—', h.bestAugments.slice(0, 2).map((x) => x.name_cn).join('、'), h.isMine ? '🌟 我翻的' : '']),
+              [{ header: '#', align: 'right' }, { header: '英雄' }, { header: '推荐分', align: 'right' }, { header: '胜率', align: 'right' }, { header: '登场率', align: 'right' }, { header: '推荐海克斯牌' }, { header: '备注' }],
+              a.aramPool.map((h) => [h.rank, h.title, h.score !== null ? String(h.score) : '—', h.winRate !== null ? pct(h.winRate) : '—', h.pickRate !== null ? pct(h.pickRate) : '—', h.bestAugments.slice(0, 2).map((x) => x.name_cn).join('、'), h.isMine ? '🌟 我翻的' : (h.score === null ? '无榜数据' : '')]),
             );
           } else {
             println('🎴 队友还在翻牌，翻开的英雄进池后自动刷新');
@@ -313,23 +319,55 @@ program
     try {
       const session = await getGameflowSession();
       const heroes = await getHeroList();
-      const players = session.gameData.players;
+      const gd = session.gameData ?? ({} as typeof session.gameData);
+      // 普通模式：gameData.players；KIWI（海克斯大乱斗）：无 players，用 teamOne/teamTwo（各 5 人）
+      const gm = gd.queue?.gameMode ?? gd.gameMode ?? '';
+      let players: import('./api/lcu.js').GamePlayer[] = [];
+      // 敌我归一化：用当前召唤师 puuid 定位自己所在队伍，自己队 → teamId 100（我方），对面 → 200
+      const me = await getCurrentSummoner().catch(() => null);
+      if ((gd.players ?? []).length) {
+        const classic = gd.players as import('./api/lcu.js').GamePlayer[];
+        const myTid = classic.find((p) => p.puuid === me?.puuid)?.teamId ?? 100;
+        players = classic.map((p) => ({ ...p, teamId: p.teamId === myTid ? 100 : 200 }));
+      } else if (Array.isArray(gd.teamOne) && gd.teamOne.length) {
+        // KIWI：先按 puuid 定位自己阵营，再映射 100=我方 / 200=对面
+        const inOne = (gd.teamOne ?? []).some((p) => p.puuid === me?.puuid);
+        const mySide = inOne ? (gd.teamOne ?? []) : (gd.teamTwo ?? []);
+        const theirSide = inOne ? (gd.teamTwo ?? []) : (gd.teamOne ?? []);
+        const all = [...mySide.map((p) => ({ ...p, teamId: 100 as const })), ...theirSide.map((p) => ({ ...p, teamId: 200 as const }))];
+        const infos = await Promise.all(all.map((p) => getSummoner(p.summonerId).then((s) => ({ name: summonerDisplayName(s), level: s.summonerLevel ?? 0 })).catch(() => ({ name: `召唤师${p.summonerId}`, level: 0 }))));
+        players = all.map((p, i) => ({
+          summonerId: p.summonerId,
+          summonerName: infos[i].name,
+          puuid: p.puuid,
+          championId: p.championId,
+          teamId: p.teamId,
+          position: p.selectedPosition ?? '',
+          isBot: false,
+          profileIconId: p.profileIconId,
+          summonerLevel: infos[i].level,
+        }));
+      }
       if (!players.length) {
         println('当前对局没有玩家数据（确认已进入加载画面）');
         return;
       }
-      println(`🎮 ${session.gameData.gameMode} · 地图 ${session.gameData.mapId} · 共 ${players.length} 人`);
+      // 大乱斗系（海克斯大乱斗 KIWI / 普通大乱斗 ARAM）无排位段位：跳过 10 人段位查询
+      const aramLike = gm === 'KIWI' || gm === 'ARAM' || gm === 'ARAM_GAME';
+      println(`🎮 ${gm} · 地图 ${gd.mapId ?? session.gameData.mapId} · 共 ${players.length} 人${aramLike ? ' · 大乱斗无段位' : ''}`);
 
-      // 并发查段位（失败不阻塞）
+      // 并发查段位（失败不阻塞；大乱斗跳过）
       const ranked = new Map<number, string>();
-      const results = await Promise.allSettled(players.filter((p) => !p.isBot).map((p) => getRankedStats(p.summonerId)));
-      players.filter((p) => !p.isBot).forEach((p, i) => {
-        const r = results[i];
-        if (r.status === 'fulfilled' && r.value && r.value.length) {
-          const solo = r.value.find((q) => q.queue.includes('RANKED_SOLO')) ?? r.value[0];
-          ranked.set(p.summonerId, `${solo.tier} ${solo.division} ${solo.lp}LP`);
-        }
-      });
+      if (!aramLike) {
+        const results = await Promise.allSettled(players.filter((p) => !p.isBot).map((p) => getRankedStats(p.summonerId)));
+        players.filter((p) => !p.isBot).forEach((p, i) => {
+          const r = results[i];
+          if (r.status === 'fulfilled' && r.value && r.value.length) {
+            const solo = r.value.find((q) => q.queue.includes('RANKED_SOLO')) ?? r.value[0];
+            ranked.set(p.summonerId, `${solo.tier} ${solo.division} ${solo.lp}LP`);
+          }
+        });
+      }
 
       for (const team of [100, 200]) {
         const members = players.filter((p) => p.teamId === team);
@@ -388,12 +426,15 @@ program
     }
     // watch 模式（npm run web:watch）：代码变更会重启进程，自动开浏览器会不断新增标签页，故跳过
     const isWatch = process.env.npm_lifecycle_event === 'web:watch';
-    // startWebServer 内部绑定 127.0.0.1（仅本机可访问）并在就绪时回调
-    startWebServer(port, (url2) => {
-      println(`🌐 T101 Web 界面已启动: ${url2}`);
+    // startWebServer 监听 0.0.0.0：本机 + 局域网（手机同 Wi-Fi 可访问）
+    startWebServer(port, (urls) => {
+      const [localUrl, ...lanList] = urls;
+      println(`🌐 T101 Web 界面已启动: ${localUrl}`);
+      for (const u of lanList) println(`📱 手机访问（同一 Wi-Fi）: ${u}`);
+      if (lanList.length) println('   ⚠️ 已开放局域网访问：同网络设备可查看本机游戏数据，公共 Wi-Fi 请谨慎使用');
       println('   Ctrl+C 停止服务');
       if (opts.open && !isWatch) {
-        try { execSync(`start ${url2}`, { stdio: 'ignore', windowsHide: true }); } catch { /* ignore */ }
+        try { execSync(`start ${localUrl}`, { stdio: 'ignore', windowsHide: true }); } catch { /* ignore */ }
       }
     });
   });
@@ -430,7 +471,7 @@ program
 
 program
   .command('augment')
-  .description('游戏内海克斯牌选择推荐（3/7/11/14 级选牌，输入当前三张牌名）')
+  .description('游戏内海克斯牌选择推荐（3/7/11/15 级选牌，泉水复活后出现选牌界面，输入当前三张牌名）')
   .argument('[names]', '当前可选牌名关键词，逗号分隔（如：魔法飞弹,风暴之怒,超频）')
   .option('--heroes <names>', '手动指定我方英雄（逗号分隔），默认自动读游戏内我方阵容')
   .action(async (names: string | undefined, opts: { heroes?: string }) => {
@@ -460,6 +501,7 @@ program
       // 我方英雄：优先 --heroes，否则自动读游戏内阵容
       let myHeroIds: number[] = [];
       let myHeroNames = '';
+      let myHeroId = 0; // 自己的英雄（评级基准）
       const heroes = await getHeroList();
       if (opts.heroes) {
         const resolved = await resolveHeroes(opts.heroes.split(','));
@@ -471,12 +513,29 @@ program
           println(`ℹ️  当前不在游戏中（阶段: ${phase}），推荐按「无阵容加成」计算；可用 --heroes 手动指定阵容`);
         }
         const g = await getGameflowSession().catch(() => null);
-        const players = g?.gameData?.players ?? [];
-        myHeroIds = [...new Set(players.filter((p) => p.teamId === 100 && p.championId > 0).map((p) => p.championId))];
+        const gd = g?.gameData ?? ({} as NonNullable<typeof g>['gameData']);
+        // 普通模式：gameData.players（teamId 100=我方）；KIWI（海克斯大乱斗）：teamOne/teamTwo + 自己 puuid 判断阵营
+        const classic = gd.players ?? [];
+        if (classic.length) {
+          myHeroIds = [...new Set(classic.filter((p) => p.teamId === 100 && p.championId > 0).map((p) => p.championId))];
+          const me = await getCurrentSummoner().catch(() => null);
+          myHeroId = classic.find((p) => p.teamId === 100 && p.puuid === me?.puuid)?.championId ?? 0;
+        } else if (Array.isArray(gd.teamOne) && gd.teamOne.length) {
+          const me = await getCurrentSummoner().catch(() => null);
+          const myTeam = (gd.teamOne ?? []).some((p) => p.puuid === me?.puuid) ? (gd.teamOne ?? []) : (gd.teamTwo ?? []);
+          myHeroIds = [...new Set(myTeam.filter((p) => p.championId > 0).map((p) => p.championId))];
+          myHeroId = myTeam.find((p) => p.puuid === me?.puuid)?.championId ?? 0;
+        }
         myHeroNames = myHeroIds.map((id) => heroes.get(id)?.title ?? `#${id}`).join('、');
       }
-      const recs = await recommendAugmentChoices(ids, myHeroIds);
-      println(`\n🎮 海克斯牌选择推荐（我方阵容: ${myHeroNames || '未知'}）`);
+      // 评级基准：优先自己的英雄，读不到（手动 --heroes / 不在游戏）时回退全队
+      const heroIds = myHeroId > 0 ? [myHeroId] : myHeroIds;
+      const myHeroName = myHeroId > 0 ? heroes.get(myHeroId)?.title ?? `#${myHeroId}` : '';
+      const recs = await recommendAugmentChoices(ids, heroIds);
+      const heroLine = myHeroId > 0
+        ? `🎯 你的英雄: ${myHeroName} · 队友: ${myHeroNames.split('、').filter((h) => h !== myHeroName).join('、') || '—'}`
+        : `我方阵容: ${myHeroNames || '未知'}`;
+      println(`\n🎮 海克斯牌选择推荐（${heroLine} · 评级按你的英雄适配）`);
       printTable(
         [{ header: '评级', align: 'left' }, { header: '海克斯牌' }, { header: '品质' }, { header: '胜率', align: 'right' }, { header: '出场率', align: 'right' }, { header: '命中阵容' }, { header: '适合英雄' }],
         recs.map((r) => [
@@ -489,6 +548,182 @@ program
       );
       const best = recs[0];
       if (best) println(`\n✅ 推荐选择: ${best.grade} ${best.name}（综合分 ${best.score}）`);
+      // 海斗榜：自己英雄的官方推荐海克斯 + 最佳搭档
+      if (myHeroId > 0) {
+        const { recommendHextechHeroes } = await import('./services/hextech.js');
+        const myStat = (await recommendHextechHeroes(300).catch(() => [])).find((h) => h.heroId === myHeroId);
+        if (myStat) {
+          println(`\n🏆 海斗榜 #${myStat.rank} ${myStat.title} · 胜率 ${pct(myStat.winRate)} · 登场 ${pct(myStat.pickRate)}`);
+          if (myStat.bestAugments.length) {
+            println(`🃏 推荐海克斯: ${myStat.bestAugments.slice(0, 5).map((a) => `${a.name_cn} ${pct(a.winRate)}`).join('、')}`);
+          }
+          if (myStat.bestPartners.length) {
+            println(`🤝 最佳搭档: ${myStat.bestPartners.slice(0, 3).map((p) => `${p.title} ${pct(p.winRate)}`).join('、')}`);
+          }
+        }
+      }
+    } catch (e) {
+      println(`❌ ${(e as Error).message}`);
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command('sync')
+  .description('定期更新本地数据快照（版本变更才重拉；可配合 Windows 计划任务定时运行）')
+  .option('-a, --all', '拉取所有段位榜单（默认仅全段位 255）')
+  .option('-f, --force', '强制重拉所有数据（忽略已有快照）')
+  .option('--no-ranks', '跳过峡谷榜单')
+  .option('--no-hex', '跳过海克斯/大乱斗数据')
+  .option('--opgg', '同时拉取 op.gg 韩服榜单（参考）')
+  .option('-r, --region <region>', 'op.gg 服务器（配合 --opgg）', 'kr')
+  .action(async (opts) => {
+    try {
+      const started = Date.now();
+      const rows: [string, string, string, string][] = [];
+      let updated = 0;
+      let skipped = 0;
+
+      // 版本列表（强制刷新，识别新版本；之后各接口按版本号命中/新建快照）
+      const versions = await getVersions(true);
+      const version = versions[0]?.name ?? '?';
+      println(`📦 当前版本: ${version}${versions[0]?.public_date ? `（${versions[0].public_date}）` : ''}`);
+
+      // 1. 峡谷榜单：默认全段位 × 6 位置；--all 时 11 段位 × 6 位置
+      if (opts.ranks) {
+        const tiers: TierId[] = opts.all ? ALL_TIERS : [255];
+        for (const tier of tiers) {
+          for (const lane of ALL_LANES) {
+            const key = `rankings:${tier}:${lane}:${version}`;
+            if (!opts.force && snapshotGet(key)) {
+              skipped++;
+              continue;
+            }
+            const data = await getChampionRankings({ tier, lane, version }, true);
+            updated++;
+            rows.push([`榜单 ${TIER_NAMES[tier]} ${lane}`, version, `${data.length} 条`, '✓ 已更新']);
+          }
+        }
+      }
+
+      // 2. 海克斯/大乱斗（按日期快照：当天数据生成后不再变化，已有则跳过）
+      if (opts.hex) {
+        const existed = (prefix: string) => {
+          for (let i = 0; i < 4; i++) if (snapshotGet(`${prefix}:${daysAgo(i)}`)) return true;
+          return false;
+        };
+        const heroExisted = existed('hex_hero');
+        const runeExisted = existed('hex_rune');
+        const aramExisted = existed('aram_hero');
+        const [hexHero, hexRune, aram] = await Promise.all([
+          opts.force ? getHextechHeroRank(undefined, true) : getHextechHeroRank(),
+          opts.force ? getHextechRuneRank(undefined, true) : getHextechRuneRank(),
+          opts.force ? getAramHeroRank(undefined, true) : getAramHeroRank(),
+        ]);
+        const findDate = (prefix: string) => {
+          for (let i = 0; i < 4; i++) {
+            const m = snapshotGet(`${prefix}:${daysAgo(i)}`)?.meta;
+            if (m) return m.date ?? daysAgo(i);
+          }
+          return '?';
+        };
+        const hexDate = findDate('hex_hero');
+        const runeDate = findDate('hex_rune');
+        const aramDate = findDate('aram_hero');
+        const push = (label: string, date: string, data: unknown[], existedBefore: boolean) => {
+          if (existedBefore) {
+            skipped++;
+            rows.push([label, date, `${(data as unknown[]).length} 条`, '✓ 已是最新']);
+          } else {
+            updated++;
+            rows.push([label, date, `${(data as unknown[]).length} 条`, '✓ 已更新']);
+          }
+        };
+        push('海克斯英雄榜', hexDate, hexHero, heroExisted);
+        push('海克斯牌榜', runeDate, hexRune, runeExisted);
+        push('大乱斗英雄榜', aramDate, aram, aramExisted);
+      }
+
+      // 3. 静态表（英雄/海克斯牌）
+      const [heroes, augments] = await Promise.all([getHeroList(opts.force), getAugmentList(opts.force)]);
+      rows.push(['英雄静态表', '', `${heroes.size} 条`, opts.force ? '✓ 已刷新' : '✓ 已确认']);
+      rows.push(['海克斯牌表', '', `${augments.size} 条`, opts.force ? '✓ 已刷新' : '✓ 已确认']);
+
+      // 4. op.gg 韩服参考（可选）
+      if (opts.opgg) {
+        try {
+          const cachedBefore = !!getOpggChampionRankingsCached(opts.region, 'all');
+          const opgg = await getOpggChampionRankings({ region: opts.region, tier: 'all' }, opts.force);
+          if (cachedBefore && !opts.force) {
+            skipped++;
+            rows.push([`op.gg ${opts.region} 榜单`, opgg[0]?.patch ?? '?', `${opgg.length} 条`, '✓ 已是最新']);
+          } else {
+            updated++;
+            rows.push([`op.gg ${opts.region} 榜单`, opgg[0]?.patch ?? '?', `${opgg.length} 条`, '✓ 已更新']);
+          }
+        } catch (e) {
+          println(`⚠️ op.gg 拉取失败（不影响其他数据）: ${(e as Error).message}`);
+        }
+      }
+
+      println('');
+      printTable(
+        [{ header: '数据集' }, { header: '版本/日期' }, { header: '规模' }, { header: '状态' }],
+        rows,
+      );
+      println(`✅ sync 完成：更新 ${updated} 项、跳过 ${skipped} 项（已是最新）· 耗时 ${((Date.now() - started) / 1000).toFixed(1)}s`);
+      println(`   📁 本地快照共 ${snapshotList().length} 个 → ${SNAPSHOT_DIR}`);
+      println('   提示：可配合 Windows 计划任务定时执行（如每天一次），版本变更时自动重拉');
+    } catch (e) {
+      println(`❌ ${(e as Error).message}`);
+      process.exitCode = 1;
+    }
+  });
+
+program
+  .command('opgg')
+  .description('op.gg 韩服榜单（参考：游戏版本与国服一致，可对比趋势/禁用率）')
+  .option('-r, --region <region>', '服务器 kr/na/euw/eune/oce/jp/ru/tr/br/las/lan/sg/ph/tw/th/vn', 'kr')
+  .option('-t, --tier <tier>', '段位 all/challenger/grandmaster/master/diamond/emerald/platinum/gold/silver/bronze/iron', 'all')
+  .option('-n, --top <n>', '展示数量', '20')
+  .option('-f, --force', '强制重新拉取（默认用 24h 内本地快照）')
+  .option('--no-color', '禁用颜色')
+  .action(async (opts) => {
+    try {
+      const [data, heroes] = await Promise.all([
+        getOpggChampionRankings({ region: opts.region, tier: opts.tier }, opts.force),
+        getHeroList(),
+      ]);
+      // 每英雄取排名最好的位置，按 rank 排序
+      const best = new Map<string, OpggChampionStat>();
+      for (const row of data) {
+        const prev = best.get(row.key);
+        if (!prev || row.rank < prev.rank) best.set(row.key, row);
+      }
+      const rows = [...best.values()].sort((a, b) => a.rank - b.rank).slice(0, Number(opts.top));
+      const patch = rows[0]?.patch ?? '?';
+      println(`🌐 op.gg ${opts.region.toUpperCase()} 英雄榜（${opts.tier} · patch ${patch} · 每英雄取最佳位置）`);
+      printTable(
+        [{ header: '排名', align: 'right' }, { header: '英雄' }, { header: '位置' }, { header: 'T级' }, { header: '胜率', align: 'right' }, { header: '登场率', align: 'right' }, { header: '禁用率', align: 'right' }, { header: '克制它（前3）' }],
+        rows.map((r, i) => {
+          const hid = matchOpggToHero(heroes, r.key);
+          const cn = (name: string) => {
+            const h = matchOpggToHero(heroes, name);
+            return h ? heroDisplayName(heroes.get(h), h) : name;
+          };
+          return [
+            i + 1,
+            hid ? heroDisplayName(heroes.get(hid), hid) : r.name,
+            normalizeOpggPosition(r.positionName),
+            tierColor(`T${r.tier}`),
+            pct(r.winRate),
+            pct(r.pickRate),
+            pct(r.banRate),
+            r.counters.slice(0, 3).map(cn).join('、'),
+          ];
+        }),
+      );
+      println('   ℹ️ 参考数据：游戏版本与国服一致，但玩家行为（胜率/禁用率）有差异；快照存本地，可用 t101 sync --opgg 定期更新');
     } catch (e) {
       println(`❌ ${(e as Error).message}`);
       process.exitCode = 1;
@@ -499,10 +734,11 @@ program
   .command('cache')
   .description('缓存管理')
   .command('clear')
-  .description('清空缓存')
+  .description('清空缓存与本地快照')
   .action(() => {
     cacheClear();
-    println('✅ 缓存已清空');
+    snapshotClear();
+    println('✅ 缓存与快照已清空');
   });
 
 program.parse();

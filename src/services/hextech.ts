@@ -75,13 +75,47 @@ export async function recommendHextechHeroes(topN = 20): Promise<HeroAugmentSugg
         pickRate: runePick.get(id) ?? 0,
         winRank: runeRank.get(id) ?? 0,
       })),
-      bestPartners: h.bestPartners.slice(0, 3).map((p) => ({
-        heroId: p.heroId,
-        title: heroDisplayName(heroes.get(p.heroId), p.heroId),
-        alias: heroes.get(p.heroId)?.alias ?? '',
-        winRate: toPct(p.winRate),
-      })),
+      // 最佳拍档：按组合胜率降序取前 3（官方字段按综合 rank 排序，与胜率顺序不一致）
+      bestPartners: h.bestPartners
+        .slice()
+        .sort((a, b) => b.winRate - a.winRate)
+        .slice(0, 3)
+        .map((p) => ({
+          heroId: p.heroId,
+          title: heroDisplayName(heroes.get(p.heroId), p.heroId),
+          alias: heroes.get(p.heroId)?.alias ?? '',
+          winRate: toPct(p.winRate),
+        })),
     }));
+}
+
+/** 最佳拍档榜：聚合官方英雄榜的搭档数据，按组合胜率排序（101 页面第三个内页签） */
+export async function recommendHextechPartners(topN = 20): Promise<{
+  heroId: number; heroTitle: string; heroAlias: string;
+  partnerId: number; partnerTitle: string; partnerAlias: string;
+  winRate: number; pickRate: number;
+}[]> {
+  const [heroes, list] = await Promise.all([getHeroList(), getHextechHeroRank()]);
+  const rows: {
+    heroId: number; heroTitle: string; heroAlias: string;
+    partnerId: number; partnerTitle: string; partnerAlias: string;
+    winRate: number; pickRate: number;
+  }[] = [];
+  for (const h of list) {
+    for (const p of h.bestPartners) {
+      rows.push({
+        heroId: h.heroId,
+        heroTitle: heroDisplayName(heroes.get(h.heroId), h.heroId),
+        heroAlias: heroes.get(h.heroId)?.alias ?? '',
+        partnerId: p.heroId,
+        partnerTitle: heroDisplayName(heroes.get(p.heroId), p.heroId),
+        partnerAlias: heroes.get(p.heroId)?.alias ?? '',
+        winRate: toPct(p.winRate),
+        pickRate: toPct(p.pickRate),
+      });
+    }
+  }
+  return rows.sort((a, b) => b.winRate - a.winRate).slice(0, topN);
 }
 
 /** 品质显示名 */

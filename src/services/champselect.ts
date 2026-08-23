@@ -27,6 +27,8 @@ export interface ChampSelectAnalysis {
   myOpenLanes: string[];
   /** 我方 assignedPosition */
   myLane: string;
+  /** 自己的英雄 id（海斗：翻牌/选定后 >0，用于展示该英雄的海斗榜推荐） */
+  myHeroId: number;
   picks: PickRecommendation[];
   bans: BanRecommendation[];
   /** 海克斯/大乱斗英雄推荐（仅 aram 模式） */
@@ -70,6 +72,8 @@ export interface BoardPlayer {
   summonerName: string;
   lane: string;
   championId: number;
+  /** 海克斯大乱斗：该玩家翻开的全部卡（部分客户端字段形态） */
+  championIds?: number[];
   isMe: boolean;
   /** 是否当前操作者（正在 ban/pick） */
   acting: boolean;
@@ -80,44 +84,71 @@ export interface AramPoolEntry {
   heroId: number;
   title: string;
   alias: string;
+  /** 池内推荐序号（按综合分排序，1 起；无数据英雄排最后） */
+  rank: number;
   /** 百分比胜率；榜内无数据为 null */
   winRate: number | null;
   pickRate: number | null;
+  /** 综合推荐分 0-100（胜率 70% + 登场率 30%）；榜外英雄为 null */
+  score: number | null;
   bestAugments: { name_cn: string; winRate: number }[];
+  /** 最佳搭档（组合胜率，百分比） */
+  bestPartners: { title: string; winRate: number }[];
   /** 是否自己翻开（自己的卡牌） */
   isMine: boolean;
 }
 
+/** 海斗共享池英雄综合推荐分（0-100，数据驱动）：胜率 70% + 登场率 30%；无榜数据为 null */
+export function aramPoolScore(winRate: number | null, pickRate: number | null): number | null {
+  if (winRate === null || pickRate === null) return null;
+  const wr = Math.max(0, Math.min(100, (winRate - 45) * 8)); // 胜率 45%→0 分，50%→40，55%→80
+  const pr = Math.max(0, Math.min(100, pickRate * 6));       // 登场率 8%→48 分，16%→96
+  return Math.round(wr * 0.7 + pr * 0.3);
+}
+
+/** 取一名玩家翻开的英雄（兼容 LCU 字段形态：championId 单值 / championIds 数组） */
+function flippedHeroIds(p: { championId: number; championIds?: number[] }): number[] {
+  const ids = new Set<number>();
+  for (const id of p.championIds ?? []) if (id > 0) ids.add(id);
+  if (p.championId > 0) ids.add(p.championId);
+  return [...ids];
+}
+
 /**
- * 构建海克斯大乱斗共享池：我方已翻开（championId>0）的英雄去重，
+ * 构建海克斯大乱斗共享池：双方已翻开（championId>0 / championIds）的英雄去重，
  * 匹配胜率榜数据（无榜数据的补空），按胜率降序。
+ * 海斗共享池为 10 人共用：我方 + 对面翻开的卡都会进池，全员可选。
  */
 export function buildAramPool(
-  myTeam: { cellId: number; championId: number }[],
+  myTeam: { cellId: number; championId: number; championIds?: number[] }[],
+  theirTeam: { cellId: number; championId: number; championIds?: number[] }[],
   localPlayerCellId: number,
   heroes: ReadonlyMap<number, { heroId: number; name: string; title: string; alias: string }>,
   aramHeroes: Awaited<ReturnType<typeof recommendHextechHeroes>>,
 ): AramPoolEntry[] {
-  const flipped = myTeam.filter((p) => p.championId > 0).map((p) => p.championId);
-  const mine = new Set(
-    myTeam.filter((p) => p.cellId === localPlayerCellId && p.championId > 0).map((p) => p.championId),
-  );
+  const flipped = [...myTeam, ...theirTeam].flatMap(flippedHeroIds);
+  const mine = new Set(flippedHeroIds(myTeam.find((p) => p.cellId === localPlayerCellId) ?? { championId: 0 }));
   const rankMap = new Map(aramHeroes.map((h) => [h.heroId, h]));
   return [...new Set(flipped)]
     .map((id) => {
       const r = rankMap.get(id);
       const h = heroes.get(id);
+      const winRate = r?.winRate ?? null;
+      const pickRate = r?.pickRate ?? null;
       return {
         heroId: id,
         title: h?.title ?? `#${id}`,
         alias: h?.alias ?? '',
-        winRate: r?.winRate ?? null,
-        pickRate: r?.pickRate ?? null,
+        winRate,
+        pickRate,
+        score: aramPoolScore(winRate, pickRate),
         bestAugments: (r?.bestAugments ?? []).map((a) => ({ name_cn: a.name_cn, winRate: a.winRate })),
+        bestPartners: (r?.bestPartners ?? []).slice(0, 3).map((p) => ({ title: p.title, winRate: p.winRate })),
         isMine: mine.has(id),
       };
     })
-    .sort((a, b) => (b.winRate ?? -1) - (a.winRate ?? -1));
+    .sort((a, b) => (b.score ?? -1) - (a.score ?? -1)) // 有分在前按分降序，榜外（无分）排最后
+    .map((entry, i) => ({ ...entry, rank: i + 1 }));
 }
 
 const TIMER_PHASE_NAMES: Record<string, string> = {
@@ -168,6 +199,7 @@ export async function analyzeChampSelect(): Promise<ChampSelectAnalysis> {
   const me = session.myTeam.find((p) => p.cellId === session.localPlayerCellId);
   const rawLane = me?.assignedPosition ?? '';
   const myLane = rawLane && !['none', 'fill'].includes(rawLane) ? normalizeLane(rawLane) : 'ALL';
+  const myHeroId = me?.championId ?? 0;
   const myOpenLanes = session.myTeam
     .filter((p) => p.assignedPosition && !['none', 'utility', 'fill'].includes(p.assignedPosition))
     .map((p) => p.assignedPosition.toUpperCase());
@@ -204,6 +236,7 @@ export async function analyzeChampSelect(): Promise<ChampSelectAnalysis> {
         summonerName: nameOf(p),
         lane: p.assignedPosition ?? '',
         championId: p.championId,
+        championIds: p.championIds,
         isMe: p.cellId === session.localPlayerCellId,
         acting: pending?.actorCellId === p.cellId,
       }));
@@ -234,10 +267,11 @@ export async function analyzeChampSelect(): Promise<ChampSelectAnalysis> {
     enemyBans,
     myOpenLanes,
     myLane,
+    myHeroId,
     picks,
     bans,
     aramHeroes,
-    aramPool: isHextechMode(mode) ? buildAramPool(session.myTeam, session.localPlayerCellId, heroes, aramHeroes) : [],
+    aramPool: isHextechMode(mode) ? buildAramPool(session.myTeam, session.theirTeam, session.localPlayerCellId, heroes, aramHeroes) : [],
     tier,
     tierName: TIER_NAMES[tier] ?? '全段位',
     timerPhase: TIMER_PHASE_NAMES[session.timer.phase] ?? session.timer.phase,

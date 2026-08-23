@@ -1,4 +1,4 @@
-// 海克斯大乱斗：游戏内海克斯牌选择推荐（3/7/11/14 级选牌）
+// 海克斯大乱斗：游戏内海克斯牌选择推荐（3/7/11/15 级选牌（泉水复活后出现选牌界面））
 // 评分 = 牌榜胜率 + 阵容适配加分（牌榜 bestHeroes 命中我方英雄数），输出 S/A/B/C/D 等级
 import { getAugmentList, getHextechRuneRank, getHeroList } from '../api/cn101.js';
 import { heroDisplayName, type AugmentInfo, type HextechRuneStat } from '../models.js';
