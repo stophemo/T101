@@ -1,3 +1,16 @@
+# T101 0.0.3
+
+新增 NSIS 安装包并改为通过 GitHub Release 自动发布。
+
+## 本版内容
+
+- 新增 NSIS 安装包 `t101-panel_0.0.3_x64-setup.exe`，自动携带 `WebView2Loader.dll` 等运行文件，修复此前直接分发裸 exe 导致的「找不到 WebView2Loader.dll」无法启动问题；安装界面支持简体中文。
+- 推 tag（`v*`）时 CI 自动构建、签名并发布 GitHub Release；安装包与裸 exe 均附带 Sigstore 签名（`.sig`）与证书（`.pem`）。
+- 仍可通过 `npm run panel:verify` 校验裸 exe 的签名完整性；安装包同样附带签名文件可供校验。
+- 说明：Sigstore 签名不改变 Windows SmartScreen 行为，首次运行仍可能提示未知发布者，选择「仍要运行」即可。
+
+---
+
 # T101 0.0.2
 
 构建产物签名与仓库元信息更新。

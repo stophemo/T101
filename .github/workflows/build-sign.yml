@@ -1,6 +1,7 @@
-# Windows 构建 + Sigstore 无密钥签名（cosign）
+# Windows 构建 + Sigstore 无密钥签名（cosign）+ NSIS 安装包 + GitHub Release
 # 在 GitHub 的 Windows runner 上构建，不依赖本地机器。
-# 手动触发：Actions → build-sign → Run workflow（默认 main 分支）
+# 手动触发：Actions → build-sign → Run workflow（默认 master 分支）
+# 打 tag（v*）推送时自动构建、签名并发布 Release。
 name: build-sign
 
 on:
@@ -9,7 +10,7 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: read
+  contents: write
   # OIDC 令牌，用于 cosign 无密钥签名（不持有任何私钥）
   id-token: write
 
@@ -46,11 +47,42 @@ jobs:
             --output-certificate "$($exe).pem" `
             $exe
 
-      - name: Upload signed artifact
+      - name: Bundle NSIS installer (from signed exe)
+        run: npm run panel:bundle
+
+      - name: Sign NSIS installer with Sigstore (keyless)
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem "desktop/src-tauri/target/release/bundle/nsis/*-setup.exe" | Select-Object -First 1
+          cosign sign-blob --yes `
+            --output-signature "$($setup.FullName).sig" `
+            --output-certificate "$($setup.FullName).pem" `
+            $setup.FullName
+          echo "SETUP_PATH=$($setup.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Upload signed artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: t101-panel-signed
+          name: t101-panel-v0.0.3
           path: |
             desktop/src-tauri/target/release/t101-panel.exe
             desktop/src-tauri/target/release/t101-panel.exe.sig
             desktop/src-tauri/target/release/t101-panel.exe.pem
+            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.sig
+            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.pem
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: T101 ${{ github.ref_name }}
+          body_path: RELEASE_NOTES.md
+          fail_on_unmatched_globs: true
+          files: |
+            desktop/src-tauri/target/release/t101-panel.exe
+            desktop/src-tauri/target/release/t101-panel.exe.sig
+            desktop/src-tauri/target/release/t101-panel.exe.pem
+            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.sig
+            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.pem
