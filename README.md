@@ -33,30 +33,8 @@
 ```powershell
 npm install
 npm test
-npm run t101 -- --help
+npm run web
 ```
-
-直接执行 CLI：
-
-```powershell
-npm run t101 -- pick 亚索,盲僧,锤石
-npm run t101 -- ban
-npm run t101 -- rank -l MIDDLE
-npm run t101 -- hero 劫 -l MIDDLE
-npm run t101 -- hex
-npm run t101 -- loading
-npm run t101 -- lcu status
-```
-
-安装为全局命令：
-
-```powershell
-npm link
-t101 pick 亚索,盲僧
-t101 champselect -w
-```
-
-英雄名支持中文、英文、称号和英雄 ID。常用段位参数为 `255` 全段位、`10` 王者、`7` 钻石；完整参数可通过 `t101 --help` 查看。
 
 ## Web 面板
 
@@ -67,12 +45,6 @@ npm run web
 ```
 
 浏览器访问：<http://127.0.0.1:7892>
-
-也可以显式指定端口：
-
-```powershell
-npm run t101 -- web -p 7892 --no-open
-```
 
 服务默认监听 `0.0.0.0`，因此同一局域网的设备可能看到控制台输出的访问地址。面板展示的是本机游戏数据；公共 Wi-Fi 或不可信网络环境下请不要开放访问。
 
@@ -103,14 +75,14 @@ desktop/src-tauri/target/release/t101-panel.exe
 启动服务和面板：
 
 ```powershell
-npm run t101 -- web --panel
+npm run panel
 ```
 
 也可以分开启动：
 
 ```powershell
 npm run web
-npm run t101 -- panel
+npm run panel
 ```
 
 面板行为：
@@ -121,24 +93,6 @@ npm run t101 -- panel
 - F10：切换自动停靠。
 - Ctrl+Alt+F12：退出面板。
 - 游戏使用独占全屏时，Windows 不允许普通窗口稳定覆盖在游戏上方；建议使用无边框或窗口化模式。
-
-## CLI 命令
-
-| 命令 | 作用 |
-|---|---|
-| `t101 pick <英雄列表>` | 推荐克制对手的英雄 |
-| `t101 ban [我方英雄列表]` | 推荐版本 Ban 或针对我方阵容的 Ban |
-| `t101 rank` | 查询当前版本英雄榜 |
-| `t101 hero <英雄>` | 查询该英雄的对位克制和优势对线 |
-| `t101 hex` | 查询海克斯大乱斗英雄和海克斯牌榜 |
-| `t101 sync [--all] [--opgg]` | 更新本地数据快照 |
-| `t101 opgg` | 查询 OP.GG 韩服参考榜单 |
-| `t101 champselect [-w]` | 读取 LCU 选人阶段并持续分析 |
-| `t101 loading` | 查询加载画面 10 人信息 |
-| `t101 lcu status` | 检查 League Client 连接状态 |
-| `t101 web [-p 7892]` | 启动本地 Web 服务 |
-| `t101 panel` | 启动已经构建的 Tauri 面板 |
-| `t101 cache clear` | 清理缓存和快照 |
 
 ## 数据源与隐私
 
@@ -168,8 +122,6 @@ Copy-Item src/web/index.html desktop/dist/index.html -Force
 ## 项目结构
 
 ```text
-bin/t101.mjs              全局命令包装
-src/cli.ts                CLI 入口
 src/api/cn101.ts          101.qq.com 数据接口
 src/api/opgg.ts           OP.GG 参考数据接口
 src/api/lcu.ts            本地 League Client API
@@ -184,7 +136,7 @@ desktop/src-tauri/        Tauri 2 Windows 面板
 
 - 选人和加载画面信息依赖 League Client 的本地 API；客户端未启动、接口变化或尚未同步数据时，相关视图可能为空。
 - 海克斯共享英雄池依赖当前 LCU session 返回的 `benchChampions`。如果客户端还没有返回池数据，界面会明确显示池数据尚未返回，不会用队友已选英雄回退填充。
-- 普通大乱斗和未纳入支持范围的队列不提供峡谷 BP 推荐。未知队列会按海克斯大乱斗处理，并在 CLI/Web 中保留 queue id 便于反馈。
+- 普通大乱斗和未纳入支持范围的队列不提供峡谷 BP 推荐。未知队列会按海克斯大乱斗处理，并在 Web 中保留 queue id 便于反馈。
 - 统计数据来自公开接口和本地快照，存在版本延迟、样本差异和国服/韩服环境差异，不应视为胜率保证。
 - 当前 Tauri 面板首发面向 Windows，不提供安装包和自动更新器。
 
