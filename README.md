@@ -191,5 +191,3 @@ desktop/src-tauri/        Tauri 2 Windows 面板
 ## 许可证
 
 本项目使用 MIT License，见 [LICENSE](LICENSE)。
-
-> 本仓库（T101）由原 101-tools 项目更名而来（原仓库地址已变更为 [stophemo/T101](https://github.com/stophemo/T101)），仅供学习交流。
