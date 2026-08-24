@@ -6,17 +6,21 @@ T101 是一款面向英雄联盟国服的 数据分析助手
 
 ## 核心功能
 
-- **BP 推荐**：根据对面已选英雄推荐克制 Pick；提供版本强势 Ban 与针对我方阵容的威胁 Ban。
-- **对局分析**：版本英雄榜、英雄对位克制、加载画面 10 人信息（英雄 / 位置 / 段位）。
-- **海克斯大乱斗**：共享英雄池推荐、海克斯牌推荐与最佳搭档。
+- **对局流程跟踪**：自动识别当前阶段（房间 → 匹配 → 接受确认 → 禁用 → 选人 → 加载 → 游戏），全程自动同步。
+- **BP 推荐**：根据对面已选英雄推荐克制 Pick；提供版本强势 Ban 与针对我方阵容的威胁 Ban（按账号段位过滤）。
+- **海克斯大乱斗**：共享英雄池推荐（按胜率+登场率综合评分）、游戏内海克斯牌选择评级（S/A/B/C/D）、英雄海斗榜与最佳搭档。
+- **战绩分析**：队伍房间 10 人近期状态评估、好友列表（排位/海斗分别评分）、逐场战绩明细（KDA/出装/海克斯牌）。
+- **加载画面**：10 人信息（英雄 / 位置 / 段位 / 近期战绩）。
 - **窗口跟随**：自动识别 LOL 客户端 / 游戏窗口，面板贴靠其右侧，全屏或最大化时仅调整面板位置；不抢占焦点、不使用置顶、不改变 Z 序。
+
+所有数据功能全部内嵌在桌面应用内（Rust 实现，直连 LCU 只读接口与 101.qq.com 官方数据），**不依赖任何外部服务进程、端口或浏览器**。
 
 ## 使用
 
 ### 环境要求（Windows）
 
 - Windows 10 / 11
-- Rust stable（MSVC 工具链）
+- Rust stable（MSVC 或 GNU 工具链）
 - WebView2 Runtime
 
 ### 构建与启动
@@ -25,6 +29,8 @@ T101 是一款面向英雄联盟国服的 数据分析助手
 npm run panel:build   # 首次编译约 2~5 分钟
 npm run panel         # 启动面板
 ```
+
+构建产物 `desktop/src-tauri/target/release/t101-panel.exe` 为独立可执行文件，无需 Node.js 运行环境。
 
 ### 快捷键
 
@@ -36,21 +42,19 @@ npm run panel         # 启动面板
 
 ## 签名与校验
 
-构建产物通过 **Sigstore 无密钥签名**（cosign，开源免费、无需私钥）保证供应链完整性：
+构建产物使用 **标准 Authenticode 代码签名**（SmartScreen 可识别）：
 
-- **CI 构建签名**：推 tag（`v*`）或手动触发 `build-sign` 工作流（Windows runner），产物为 `t101-panel.exe` 与 NSIS 安装包 `t101-panel_<版本>_x64-setup.exe`，均附带 `.sigstore.json` 签名 bundle，自动发布到 GitHub Release。
-- **发布说明**：在 GitHub Release 页面编写，仓库内不维护发布记录文件。
+- **CI 构建签名**：推 tag（`v*`）或手动触发 `build-sign` 工作流，签名优先级：
+  1. **Azure Trusted Signing**（微软云签名，需配置 `AZURE_*` 系列 secrets）；
+  2. **OV 代码签名证书**（DigiCert/GlobalSign 等，需配置 `CERT_PFX_BASE64` / `CERT_PFX_PASSWORD` secrets）；
+  3. 两者都未配置时退回 **Sigstore 无密钥签名**（cosign，仅供应链完整性，SmartScreen 不识别）。
+- **本地签名**：`powershell -ExecutionPolicy Bypass -File scripts\sign-windows.ps1`（用 `~/.t101-sign/cert.pfx`，osslsigncode，无需 Windows SDK）。
 
-校验 Release 产物：
-
-```powershell
-cosign verify-blob --bundle t101-panel.exe.sigstore.json `
-  --certificate-identity "https://github.com/stophemo/T101/.github/workflows/build-sign.yml@refs/heads/master" `
-  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" `
-  t101-panel.exe
-```
-
-注意：Sigstore 是开源供应链签名，**Windows SmartScreen 不识别它**，首次运行仍可能提示「未知发布者」（需要 CA 证书才能显示「已验证发布者」，后续可接入 Azure Trusted Signing 或购买代码签名证书）。
+> ⚠️ 关于「未知发布者」风险提示：
+> - Windows 11 24H2+ 若开启 **Smart App Control（智能应用控制）**，即使签名链有效（含自签名证书装入受信任根），
+>   对无微软信誉的发布者仍会拦截（WinVerifyTrust 返回 0x800B0004）。本机可到「Windows 安全中心 → 应用和浏览器控制 →
+>   智能应用控制」关闭（不可逆）；分发场景需使用 Azure Trusted Signing 或主流 CA 的 OV 证书。
+> - 自签名证书（`~/.t101-sign/`）仅对已安装其到「受信任根」的机器有效，不适用于对外分发。
 
 ## 已知限制
 

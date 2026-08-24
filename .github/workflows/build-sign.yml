@@ -1,7 +1,14 @@
-# Windows 构建 + Sigstore 无密钥签名（cosign）+ NSIS 安装包 + GitHub Release
-# 在 GitHub 的 Windows runner 上构建，不依赖本地机器。
-# 手动触发：Actions → build-sign → Run workflow（默认 master 分支）
-# 打 tag（v*）推送时自动构建、签名并发布 Release。
+# Windows 构建 + 代码签名 + NSIS 安装包 + GitHub Release
+#
+# 签名优先级（都是标准 Authenticode 签名，SmartScreen 可识别）：
+#   1. Azure Trusted Signing（微软云签名，SAC/Defender 兼容）——配置 secrets：
+#        AZURE_TENANT_ID / AZURE_CLIENT_ID / AZURE_CLIENT_SECRET
+#        T101_SIGNING_ACCOUNT / T101_SIGNING_PROFILE / T101_SIGNING_ENDPOINT
+#   2. 代码签名证书 PFX（OV 证书，如 DigiCert/GlobalSign/腾讯云 SSL 证书中的代码签名）——配置 secrets：
+#        CERT_PFX_BASE64（base64 编码的 pfx）/ CERT_PFX_PASSWORD
+#   3. 都没有 → 退回 Sigstore 无密钥签名（cosign；仅供应链完整性，SmartScreen 不识别）
+#
+# 触发：手动 workflow_dispatch（默认 master），或推送 v* tag 自动发布 Release。
 name: build-sign
 
 on:
@@ -11,7 +18,7 @@ on:
 
 permissions:
   contents: write
-  # OIDC 令牌，用于 cosign 无密钥签名（不持有任何私钥）
+  # OIDC 令牌，用于 cosign 无密钥签名兜底（不持有任何私钥）
   id-token: write
 
 jobs:
@@ -36,9 +43,39 @@ jobs:
       - name: Build Tauri (release, no bundle)
         run: npm run panel:build
 
-      - uses: sigstore/cosign-installer@v4.1.2
+      # ---------- 1. 优先 Azure Trusted Signing ----------
+      - name: Sign exe with Azure Trusted Signing
+        if: ${{ secrets.AZURE_TENANT_ID != '' }}
+        uses: Azure/trusted-signing-action@v0
+        with:
+          endpoint: ${{ secrets.T101_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.T101_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.T101_SIGNING_PROFILE }}
+          files: desktop/src-tauri/target/release/t101-panel.exe
+          sign-algorithm: SHA256
 
-      - name: Sign with Sigstore (keyless)
+      # ---------- 2. 其次 OV 证书 PFX（signtool） ----------
+      - name: Sign exe with OV certificate (signtool)
+        if: ${{ secrets.AZURE_TENANT_ID == '' && secrets.CERT_PFX_BASE64 != '' }}
+        shell: pwsh
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERT_PFX_BASE64))
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $signtool) { throw "signtool not found" }
+          & $signtool.FullName sign /fd SHA256 /f $pfx /p $env:CERT_PFX_PASSWORD `
+            /tr http://timestamp.digicert.com /td SHA256 `
+            desktop/src-tauri/target/release/t101-panel.exe
+          if ($LASTEXITCODE -ne 0) { throw "sign failed" }
+          & $signtool.FullName verify /pa /v desktop/src-tauri/target/release/t101-panel.exe | Out-Host
+
+      # ---------- 3. 都没有 → cosign 兜底 ----------
+      - uses: sigstore/cosign-installer@v4.1.2
+        if: ${{ secrets.AZURE_TENANT_ID == '' && secrets.CERT_PFX_BASE64 == '' }}
+
+      - name: Sign with Sigstore (keyless, fallback)
+        if: ${{ secrets.AZURE_TENANT_ID == '' && secrets.CERT_PFX_BASE64 == '' }}
         shell: pwsh
         run: |
           $exe = "desktop/src-tauri/target/release/t101-panel.exe"
@@ -46,10 +83,36 @@ jobs:
             --bundle "$($exe).sigstore.json" `
             $exe
 
+      # ---------- 打包 NSIS 并签名安装包 ----------
       - name: Bundle NSIS installer (from signed exe)
         run: npm run panel:bundle
 
-      - name: Sign NSIS installer with Sigstore (keyless)
+      - name: Sign NSIS installer (Azure Trusted Signing)
+        if: ${{ secrets.AZURE_TENANT_ID != '' }}
+        uses: Azure/trusted-signing-action@v0
+        with:
+          endpoint: ${{ secrets.T101_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.T101_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.T101_SIGNING_PROFILE }}
+          files-folder: desktop/src-tauri/target/release/bundle/nsis
+          files: "*-setup.exe"
+          sign-algorithm: SHA256
+
+      - name: Sign NSIS installer (OV certificate)
+        if: ${{ secrets.AZURE_TENANT_ID == '' && secrets.CERT_PFX_BASE64 != '' }}
+        shell: pwsh
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERT_PFX_BASE64))
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          $setup = Get-ChildItem "desktop/src-tauri/target/release/bundle/nsis/*-setup.exe" | Select-Object -First 1
+          & $signtool.FullName sign /fd SHA256 /f $pfx /p $env:CERT_PFX_PASSWORD `
+            /tr http://timestamp.digicert.com /td SHA256 $setup.FullName
+          if ($LASTEXITCODE -ne 0) { throw "setup sign failed" }
+
+      - name: Sign NSIS installer (Sigstore fallback)
+        if: ${{ secrets.AZURE_TENANT_ID == '' && secrets.CERT_PFX_BASE64 == '' }}
         shell: pwsh
         run: |
           $setup = Get-ChildItem "desktop/src-tauri/target/release/bundle/nsis/*-setup.exe" | Select-Object -First 1
@@ -60,7 +123,7 @@ jobs:
       - name: Upload signed artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: t101-panel-v0.0.3
+          name: t101-panel-${{ github.ref_name }}
           path: |
             desktop/src-tauri/target/release/t101-panel.exe
             desktop/src-tauri/target/release/t101-panel.exe.sigstore.json
@@ -73,7 +136,7 @@ jobs:
         with:
           name: T101 ${{ github.ref_name }}
           generate_release_notes: true
-          fail_on_unmatched_globs: true
+          fail_on_unmatched_globs: false
           files: |
             desktop/src-tauri/target/release/t101-panel.exe
             desktop/src-tauri/target/release/t101-panel.exe.sigstore.json

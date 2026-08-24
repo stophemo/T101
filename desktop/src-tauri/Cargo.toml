@@ -1,8 +1,23 @@
 [package]
 name = "t101-panel"
-version = "0.0.3"
-description = "T101 对局助手 · 侧边停靠面板（Tauri 壳）"
+version = "0.0.4"
+description = "T101 对局助手 · 侧边停靠面板（数据功能内嵌，无外部服务）"
 edition = "2021"
+
+# 开发调试程序（probe）仅通过 --features dev-tools 构建，不进入发布产物/安装包
+[[bin]]
+name = "probe"
+path = "src/bin/probe.rs"
+required-features = ["dev-tools"]
+
+[[bin]]
+name = "probe-api"
+path = "src/bin/probe-api.rs"
+required-features = ["dev-tools"]
+
+[features]
+default = []
+dev-tools = []
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -17,6 +32,10 @@ windows = { version = "0.61", features = [
   "Win32_UI_WindowsAndMessaging",
 ] }
 raw-window-handle = "0.6"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [profile.release]
 strip = true

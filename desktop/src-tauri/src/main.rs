@@ -1,15 +1,19 @@
-// T101 对局助手 · 侧边停靠面板（Tauri 2 壳）
-// - 无边框 / 普通窗口层级 / 跳过任务栏 的 WebView 窗口，加载本地静态页面
+// T101 对局助手 · 侧边停靠面板（Tauri 2，全功能内嵌，无外部服务）
+// - 无边框 / 普通窗口层级 / 跳过任务栏 的 WebView 窗口，加载本地面板页（BP/战绩/海克斯等全部功能）
+// - 数据后端全部为 Rust 内嵌实现（101.qq.com + LCU 只读），不依赖任何外部进程/端口
 // - 停靠：找到 LOL 游戏/客户端主窗口，面板贴其右侧并保持普通窗口层级；窗口铺满屏时浮于右缘
-// - F9 一键排布（游戏左 2/3，面板右 1/3）· F10 停靠开关 · F12 退出
+// - F9 一键排布（游戏左 2/3，面板右 1/3）· F10 停靠开关 · Ctrl+Alt+F12 退出
+// - 退出保障：顶栏关闭按钮 / 窗口关闭事件 → 完全退出进程；Ctrl+Alt+F12 全局热键兜底
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use tauri::{Manager, State};
+use t101_panel::{api_cmd, storage};
 use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM, RECT};
 use windows::Win32::Graphics::Gdi::{
     GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
@@ -97,8 +101,7 @@ unsafe extern "system" fn enum_windows(hwnd: HWND, lparam: LPARAM) -> windows::c
             let is_game = name.ends_with("league of legends.exe");
             let is_client = name.ends_with("leagueclientux.exe");
             if is_game || is_client {
-                // 客户端进程有多个顶层窗口（主窗口 + 大量不可见辅助窗口），
-                // 只保留“可用”窗口（可见、未最小化、尺寸>100），否则会选中不可见窗口导致停靠失效
+                // 客户端进程有多个顶层窗口，只保留“可用”窗口（可见、未最小化、尺寸>100）
                 let vis = unsafe { IsWindowVisible(hwnd) }.as_bool();
                 let icon = unsafe { IsIconic(hwnd) }.as_bool();
                 let mut r = RECT::default();
@@ -172,7 +175,6 @@ fn dock_position(target: Option<HWND>, fallback: RECT) -> (i32, i32, i32, i32) {
                 let ww = wa.right - wa.left;
                 let wh = wa.bottom - wa.top;
                 if tw >= ww - 4 && th >= wh - 4 {
-                    // 全屏/最大化：浮于工作区右缘（盖在游戏右缘上）
                     return (wa.right - PANEL_W - MARGIN, wa.top, PANEL_W, wh);
                 }
                 if tw > 200 && th > 200 {
@@ -230,8 +232,6 @@ fn apply_dock(dock: &Dock, forced: bool) {
 }
 
 /// F9 / 面板按钮：一键排布
-/// - 目标未铺满屏（桌面客户端/窗口化游戏）：目标窗口铺满工作区剩余区域，面板固定 400px 贴右
-/// - 目标已铺满屏（游戏中无边框全屏/最大化）：**不动游戏窗口**，面板仅贴工作区右缘悬浮（对局中只看战绩）
 fn arrange(dock: &Dock) {
     let Some(panel) = *dock.panel.lock().unwrap() else {
         return;
@@ -259,8 +259,7 @@ fn arrange(dock: &Dock) {
         set_window_pos(panel, wa.right - PANEL_W - MARGIN, wa.top, PANEL_W, wh, true);
         return;
     }
-    // 面板保持固定宽度，避免停靠线程下一拍又把“排布”宽度改回 400px。
-    // 目标窗口占满剩余空间，面板留出小间距贴在右侧。
+    // 面板保持固定宽度，目标窗口占满剩余空间
     let pw = PANEL_W;
     let gw = (ww - pw - MARGIN * 2).max(320);
     let px = wa.left + gw + MARGIN;
@@ -282,6 +281,15 @@ fn dock_thread(dock: Arc<Dock>) {
         // F12 常被其他程序占用，退出用 Ctrl+Alt+F12
         let r3 = RegisterHotKey(None, HOTKEY_QUIT, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, VK_F12);
         eprintln!("[dock] hotkeys: F9={:?} F10={:?} Ctrl+Alt+F12={:?}", r1, r2, r3);
+        if r1.is_err() {
+            eprintln!("[dock] 警告: F9 热键注册失败（可能被其他程序占用）");
+        }
+        if r2.is_err() {
+            eprintln!("[dock] 警告: F10 热键注册失败（可能被其他程序占用）");
+        }
+        if r3.is_err() {
+            eprintln!("[dock] 警告: Ctrl+Alt+F12 退出热键注册失败，请使用面板右上角关闭按钮退出");
+        }
     }
     apply_dock(&dock, true);
     let mut msg: MSG = unsafe { std::mem::zeroed() };
@@ -315,6 +323,13 @@ fn dock_thread(dock: Arc<Dock>) {
     }
 }
 
+// ---------- Tauri 命令 ----------
+
+#[tauri::command]
+async fn api(route: String, params: HashMap<String, String>) -> Result<serde_json::Value, String> {
+    api_cmd::dispatch(&route, params).await
+}
+
 #[tauri::command]
 fn arrange_windows(dock: State<'_, Arc<Dock>>) -> bool {
     arrange(&dock);
@@ -338,6 +353,14 @@ fn dock_status(dock: State<'_, Arc<Dock>>) -> bool {
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
+            // 数据目录：%APPDATA%/com.t101.panel（缓存 + 快照）
+            let data_dir = app
+                .path()
+                .app_data_dir()
+                .expect("app data dir");
+            let _ = std::fs::create_dir_all(&data_dir);
+            let _ = storage::DATA_DIR.set(data_dir);
+
             let dock = Arc::new(Dock::new());
             app.manage(dock.clone());
 
@@ -359,7 +382,13 @@ fn main() {
             });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![arrange_windows, set_docked, dock_status])
+        .on_window_event(|window, event| {
+            // 关闭窗口（顶栏 ✕ / Alt+F4）= 完全退出进程（含所有子线程）
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                window.app_handle().exit(0);
+            }
+        })
+        .invoke_handler(tauri::generate_handler![api, arrange_windows, set_docked, dock_status])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
