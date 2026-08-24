@@ -24,6 +24,10 @@ permissions:
 jobs:
   build-and-sign:
     runs-on: windows-latest
+    env:
+      # secrets 上下文不能直接用于 step 的 if 条件，先转成 env（env 可用于 if）
+      SIGN_AZURE: ${{ secrets.AZURE_TENANT_ID != '' }}
+      SIGN_PFX: ${{ secrets.CERT_PFX_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -45,7 +49,7 @@ jobs:
 
       # ---------- 1. 优先 Azure Trusted Signing ----------
       - name: Sign exe with Azure Trusted Signing
-        if: ${{ secrets.AZURE_TENANT_ID != '' }}
+        if: env.SIGN_AZURE == 'true'
         uses: Azure/trusted-signing-action@v0.5.11
         with:
           endpoint: ${{ secrets.T101_SIGNING_ENDPOINT }}
@@ -56,7 +60,7 @@ jobs:
 
       # ---------- 2. 其次 OV 证书 PFX（signtool） ----------
       - name: Sign exe with OV certificate (signtool)
-        if: ${{ secrets.AZURE_TENANT_ID == '' && secrets.CERT_PFX_BASE64 != '' }}
+        if: env.SIGN_AZURE == 'false' && env.SIGN_PFX == 'true'
         shell: pwsh
         run: |
           $pfx = Join-Path $env:RUNNER_TEMP "codesign.pfx"
@@ -72,10 +76,10 @@ jobs:
 
       # ---------- 3. 都没有 → cosign 兜底 ----------
       - uses: sigstore/cosign-installer@v4.1.2
-        if: ${{ secrets.AZURE_TENANT_ID == '' && secrets.CERT_PFX_BASE64 == '' }}
+        if: env.SIGN_AZURE == 'false' && env.SIGN_PFX == 'false'
 
       - name: Sign with Sigstore (keyless, fallback)
-        if: ${{ secrets.AZURE_TENANT_ID == '' && secrets.CERT_PFX_BASE64 == '' }}
+        if: env.SIGN_AZURE == 'false' && env.SIGN_PFX == 'false'
         shell: pwsh
         run: |
           $exe = "desktop/src-tauri/target/release/t101-panel.exe"
@@ -88,7 +92,7 @@ jobs:
         run: npm run panel:bundle
 
       - name: Sign NSIS installer (Azure Trusted Signing)
-        if: ${{ secrets.AZURE_TENANT_ID != '' }}
+        if: env.SIGN_AZURE == 'true'
         uses: Azure/trusted-signing-action@v0.5.11
         with:
           endpoint: ${{ secrets.T101_SIGNING_ENDPOINT }}
@@ -99,7 +103,7 @@ jobs:
           sign-algorithm: SHA256
 
       - name: Sign NSIS installer (OV certificate)
-        if: ${{ secrets.AZURE_TENANT_ID == '' && secrets.CERT_PFX_BASE64 != '' }}
+        if: env.SIGN_AZURE == 'false' && env.SIGN_PFX == 'true'
         shell: pwsh
         run: |
           $pfx = Join-Path $env:RUNNER_TEMP "codesign.pfx"
@@ -112,7 +116,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "setup sign failed" }
 
       - name: Sign NSIS installer (Sigstore fallback)
-        if: ${{ secrets.AZURE_TENANT_ID == '' && secrets.CERT_PFX_BASE64 == '' }}
+        if: env.SIGN_AZURE == 'false' && env.SIGN_PFX == 'false'
         shell: pwsh
         run: |
           $setup = Get-ChildItem "desktop/src-tauri/target/release/bundle/nsis/*-setup.exe" | Select-Object -First 1
@@ -136,7 +140,7 @@ jobs:
         with:
           name: T101 ${{ github.ref_name }}
           generate_release_notes: true
-          fail_on_unmatched_globs: false
+          fail_on_unmatched_files: false
           files: |
             desktop/src-tauri/target/release/t101-panel.exe
             desktop/src-tauri/target/release/t101-panel.exe.sigstore.json
