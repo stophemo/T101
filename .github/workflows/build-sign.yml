@@ -35,7 +35,7 @@ jobs:
       - name: Build Tauri (release, no bundle)
         run: npm run panel:build
 
-      - uses: sigstore/cosign-installer@v4
+      - uses: sigstore/cosign-installer@v4.1.2
 
       - name: Sign with Sigstore (keyless)
         shell: pwsh
