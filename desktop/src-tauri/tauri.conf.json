@@ -33,8 +33,10 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "nsis": {
-      "languages": ["SimpChinese", "English"]
+    "windows": {
+      "nsis": {
+        "languages": ["SimpChinese", "English"]
+      }
     },
     "icon": [
       "icons/32x32.png",
