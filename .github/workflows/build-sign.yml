@@ -43,8 +43,7 @@ jobs:
         run: |
           $exe = "desktop/src-tauri/target/release/t101-panel.exe"
           cosign sign-blob --yes `
-            --output-signature "$($exe).sig" `
-            --output-certificate "$($exe).pem" `
+            --bundle "$($exe).sigstore.json" `
             $exe
 
       - name: Bundle NSIS installer (from signed exe)
@@ -55,10 +54,8 @@ jobs:
         run: |
           $setup = Get-ChildItem "desktop/src-tauri/target/release/bundle/nsis/*-setup.exe" | Select-Object -First 1
           cosign sign-blob --yes `
-            --output-signature "$($setup.FullName).sig" `
-            --output-certificate "$($setup.FullName).pem" `
+            --bundle "$($setup.FullName).sigstore.json" `
             $setup.FullName
-          echo "SETUP_PATH=$($setup.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Upload signed artifacts
         uses: actions/upload-artifact@v4
@@ -66,11 +63,9 @@ jobs:
           name: t101-panel-v0.0.3
           path: |
             desktop/src-tauri/target/release/t101-panel.exe
-            desktop/src-tauri/target/release/t101-panel.exe.sig
-            desktop/src-tauri/target/release/t101-panel.exe.pem
+            desktop/src-tauri/target/release/t101-panel.exe.sigstore.json
             desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
-            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.sig
-            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.pem
+            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.sigstore.json
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
@@ -81,8 +76,6 @@ jobs:
           fail_on_unmatched_globs: true
           files: |
             desktop/src-tauri/target/release/t101-panel.exe
-            desktop/src-tauri/target/release/t101-panel.exe.sig
-            desktop/src-tauri/target/release/t101-panel.exe.pem
+            desktop/src-tauri/target/release/t101-panel.exe.sigstore.json
             desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
-            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.sig
-            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.pem
+            desktop/src-tauri/target/release/bundle/nsis/*-setup.exe.sigstore.json

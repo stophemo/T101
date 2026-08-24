@@ -3,7 +3,7 @@
 # 签名（先执行 npm run panel:build，签名时会弹出浏览器完成 OIDC 登录）：
 #   powershell -ExecutionPolicy Bypass -File scripts\sign-windows.ps1
 #
-# 校验 CI 产物（默认按 main 分支 workflow_dispatch 的身份校验）：
+# 校验 CI 产物（默认按 master 分支 workflow_dispatch 的身份校验）：
 #   powershell -ExecutionPolicy Bypass -File scripts\sign-windows.ps1 `
 #     -Verify -Identity "https://github.com/stophemo/T101/.github/workflows/build-sign.yml@refs/heads/master"
 #
@@ -35,17 +35,13 @@ if ($Verify) {
     throw "校验需要 -Identity，例如 -Identity 'https://github.com/stophemo/T101/.github/workflows/build-sign.yml@refs/heads/master'"
   }
   & $cosign verify-blob `
-    --certificate "$Exe.pem" `
-    --signature "$Exe.sig" `
+    --bundle "$($Exe).sigstore.json" `
     --certificate-identity $Identity `
     --certificate-oidc-issuer $Issuer `
     $Exe
 } else {
   & $cosign sign-blob --yes `
-    --output-signature "$($Exe).sig" `
-    --output-certificate "$($Exe).pem" `
+    --bundle "$($Exe).sigstore.json" `
     $Exe
-  Write-Host "已生成："
-  Write-Host "  $($Exe).sig"
-  Write-Host "  $($Exe).pem"
+  Write-Host "已生成：$($Exe).sigstore.json"
 }
