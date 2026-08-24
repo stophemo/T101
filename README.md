@@ -1,6 +1,6 @@
 # T101
 
-`T101` 是面向《英雄联盟》国服的对局分析工具，命令行和本地 Web 面板共用同一套服务层。它读取 101.qq.com 的公开统计数据，以及本机 League Client 的只读 LCU 接口，为 BP、海克斯大乱斗和加载画面提供参考信息。
+`T101` 是基于 Tauri 2 的《英雄联盟》侧边停靠面板：一个无边框的 400px 侧边窗口，自动跟随本机 League 客户端或游戏窗口，贴在窗口右侧边缘，不影响游戏操作。
 
 > 当前首发版本：`0.0.1`
 
@@ -17,41 +17,15 @@
 
 ## 功能
 
-- **Pick 推荐**：根据对手已选英雄、位置、对位胜率和段位强度推荐英雄。
-- **Ban 推荐**：没有我方阵容时显示版本梯度；输入我方英雄后分析对位威胁。
-- **英雄与版本榜**：查询英雄对位关系、最佳拍档、胜率、登场率、禁用率和 T 级。
-- **海克斯大乱斗**：显示英雄榜、海克斯牌推荐，以及 LCU 当前返回的共享英雄池。共享池只使用 `session.benchChampions`，不会把队友已经选定的英雄误当成共享池。
-- **LCU 选人分析**：自动读取房间、Ban、Pick、海克斯选人和当前操作倒计时。
-- **加载画面信息**：列出 10 名玩家、英雄、位置、等级、段位和近期战绩。
-- **Tauri 侧边面板**：Windows 下提供固定约 400px 的停靠面板，可贴在 League 客户端或游戏窗口右侧。
+- **窗口跟随**：自动识别 LOL 游戏主窗口（`League of Legends.exe`）或客户端主窗口（`LeagueClientUx.exe`），面板贴其右侧并保持普通窗口层级（不置顶、不抢焦点）。
+- **全屏保护**：游戏铺满屏幕时，面板只归位到工作区右缘悬浮，**绝不移动或缩放游戏窗口**。
+- **一键排布（F9）**：把游戏窗口铺到工作区剩余区域（约 2/3），面板固定 400px 贴在右侧。
+- **跟随开关（F10）**：随时暂停/恢复自动跟随。
+- **退出（Ctrl+Alt+F12）**：一键退出面板。
 
-## 快速开始
+## 构建
 
-环境要求：Node.js 22 或更高版本。LCU 相关功能还需要 League Client 正在运行。
-
-```powershell
-npm install
-npm test
-npm run web
-```
-
-## Web 面板
-
-默认端口是 **7892**，服务只建议在可信网络中使用：
-
-```powershell
-npm run web
-```
-
-浏览器访问：<http://127.0.0.1:7892>
-
-服务默认监听 `0.0.0.0`，因此同一局域网的设备可能看到控制台输出的访问地址。面板展示的是本机游戏数据；公共 Wi-Fi 或不可信网络环境下请不要开放访问。
-
-## Windows 侧边面板
-
-侧边面板使用 Tauri 2 构建，适合在选人和房间阶段与 League 客户端并排使用。它默认连接 `http://127.0.0.1:7892/`。
-
-### 构建环境
+环境要求：
 
 - Rust stable
 - Windows GNU 工具链，或 MSVC 工具链
@@ -71,17 +45,16 @@ npm run panel:build
 desktop/src-tauri/target/release/t101-panel.exe
 ```
 
-启动服务和面板：
+## 使用
 
 ```powershell
 npm run panel
 ```
 
-也可以分开启动：
+或直接运行构建产物：
 
 ```powershell
-npm run web
-npm run panel
+desktop\src-tauri\target\release\t101-panel.exe
 ```
 
 面板行为：
@@ -93,51 +66,29 @@ npm run panel
 - Ctrl+Alt+F12：退出面板。
 - 游戏使用独占全屏时，Windows 不允许普通窗口稳定覆盖在游戏上方；建议使用无边框或窗口化模式。
 
-## 数据源与隐私
-
-- `101.qq.com`：国服英雄表、版本榜单、对位、拍档、海克斯大乱斗统计。
-- OP.GG：韩服参考榜单，不代表国服实际环境。
-- League Client LCU：本机选人、游戏流程、加载画面和近期战绩。工具只发送 GET 请求，不执行自动 Ban、Pick、锁定或其他游戏操作。
-- 本地缓存位于 `data/cache.json`，统计快照位于 `data/snapshots/`。这些文件由运行过程生成，不应提交到仓库。
-- Web 服务会读取本机的对局数据。默认端口为 7892，部署或转发到公网前请先确认访问控制和网络环境。
-
 ## 开发
 
 ```powershell
-npm install
-npm test
-npx tsc --noEmit
-npm run web:watch
+npm run panel:build   # 构建 release 产物
+npx tauri dev         # 在 desktop/ 目录下运行开发模式
 ```
 
-前端文件是 `src/web/index.html`，使用原生 HTML、CSS 和 JavaScript。Tauri 构建使用 `desktop/dist/index.html`，修改前端后需要同步该文件：
-
-```powershell
-Copy-Item src/web/index.html desktop/dist/index.html -Force
-```
-
-`npm run panel:dev` 会同时启动 Web 服务 watch 和 Tauri dev 壳。后端或端口配置变更后需要重启服务和面板。
+面板前端是 `desktop/dist/index.html`（原生 HTML/CSS/JS），通过 Tauri invoke 与 Rust 后端交互（排布、跟随开关、状态查询）。修改后重新构建即可生效。
 
 ## 项目结构
 
 ```text
-src/api/cn101.ts          101.qq.com 数据接口
-src/api/opgg.ts           OP.GG 参考数据接口
-src/api/lcu.ts            本地 League Client API
-src/services/             Pick、Ban、海克斯、选人和战绩服务
-src/web/server.ts         node:http 本地服务
-src/web/index.html        Web 前端
-desktop/src-tauri/        Tauri 2 Windows 面板
- tests/                   node:test 测试
+desktop/src-tauri/        Tauri 2 Windows 跟随面板（Rust 后端 + 停靠逻辑）
+desktop/src-tauri/src/main.rs   窗口枚举、停靠、排布、热键
+desktop/dist/index.html  面板前端（静态页）
 ```
 
 ## 已知限制
 
-- 选人和加载画面信息依赖 League Client 的本地 API；客户端未启动、接口变化或尚未同步数据时，相关视图可能为空。
-- 海克斯共享英雄池依赖当前 LCU session 返回的 `benchChampions`。如果客户端还没有返回池数据，界面会明确显示池数据尚未返回，不会用队友已选英雄回退填充。
-- 普通大乱斗和未纳入支持范围的队列不提供峡谷 BP 推荐。未知队列会按海克斯大乱斗处理，并在 Web 中保留 queue id 便于反馈。
-- 统计数据来自公开接口和本地快照，存在版本延迟、样本差异和国服/韩服环境差异，不应视为胜率保证。
-- 当前 Tauri 面板首发面向 Windows，不提供安装包和自动更新器。
+- 仅支持 Windows（依赖 Win32 API 枚举窗口与停靠）。
+- 游戏使用独占全屏时无法稳定覆盖游戏窗口，建议无边框或窗口化模式。
+- 跟随依赖进程名识别 LOL 游戏/客户端主窗口；客户端未启动时面板回退到主屏右缘。
+- 不提供安装包和自动更新器。
 
 ## 许可证
 

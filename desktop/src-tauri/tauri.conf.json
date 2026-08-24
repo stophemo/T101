@@ -5,7 +5,6 @@
   "identifier": "com.t101.panel",
   "build": {
     "beforeDevCommand": "",
-    "devUrl": "http://127.0.0.1:7892/",
     "frontendDist": "../dist"
   },
   "app": {

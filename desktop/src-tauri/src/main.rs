@@ -1,10 +1,9 @@
 // T101 对局助手 · 侧边停靠面板（Tauri 2 壳）
-// - 无边框 / 普通窗口层级 / 跳过任务栏 的 WebView 窗口，加载本地 t101 Web 服务
+// - 无边框 / 普通窗口层级 / 跳过任务栏 的 WebView 窗口，加载本地静态页面
 // - 停靠：找到 LOL 游戏/客户端主窗口，面板贴其右侧并保持普通窗口层级；窗口铺满屏时浮于右缘
 // - F9 一键排布（游戏左 2/3，面板右 1/3）· F10 停靠开关 · F12 退出
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::net::{SocketAddr, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -26,9 +25,6 @@ use windows::Win32::UI::WindowsAndMessaging::{
     SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW, WM_HOTKEY,
 };
 
-const SERVER_HOST: &str = "127.0.0.1";
-const SERVER_PORT: u16 = 7892;
-/// 跟随模式下面板宽度
 const PANEL_W: i32 = 400;
 /// 面板与目标窗口的间距
 const MARGIN: i32 = 8;
@@ -272,30 +268,6 @@ fn arrange(dock: &Dock) {
     set_window_pos(panel, px, wa.top, pw, wh, true);
 }
 
-/// 等待本地 t101 Web 服务就绪后跳转（服务未起时停留在等待页，持续重试）
-fn server_waiter(dock: Arc<Dock>, win: tauri::WebviewWindow) {
-    let addr: SocketAddr = format!("{SERVER_HOST}:{SERVER_PORT}").parse().unwrap();
-    let mut waited = 0u32;
-    loop {
-        let up = TcpStream::connect_timeout(&addr, Duration::from_millis(400)).is_ok();
-        if up {
-            std::thread::sleep(Duration::from_millis(400)); // 让服务先应答
-            let url: tauri::Url = format!("http://{SERVER_HOST}:{SERVER_PORT}/")
-                .parse()
-                .unwrap();
-            if win.navigate(url).is_ok() {
-                break;
-            }
-        }
-        waited += 1;
-        if waited % 10 == 0 {
-            // 服务 10s 未起，重设一次停靠位置（避免面板卡在角落）
-            apply_dock(&dock, true);
-        }
-        std::thread::sleep(Duration::from_millis(600));
-    }
-}
-
 /// 热键 + 停靠节拍循环
 fn dock_thread(dock: Arc<Dock>) {
     for _ in 0..100 {
@@ -381,12 +353,6 @@ fn main() {
             };
             *dock.panel.lock().unwrap() = Some(Hwnd::from_raw(hwnd));
 
-            let webview = app.get_webview_window("main").expect("main webview");
-            std::thread::spawn({
-                let dock = dock.clone();
-                let win = webview.clone();
-                move || server_waiter(dock, win)
-            });
             std::thread::spawn({
                 let dock = dock.clone();
                 move || dock_thread(dock)

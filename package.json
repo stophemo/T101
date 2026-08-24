@@ -8,10 +8,7 @@
   },
   "scripts": {
     "t101": "tsx src/cli.ts",
-    "web": "tsx src/cli.ts web",
-    "web:watch": "tsx watch src/cli.ts web",
-    "panel": "tsx src/cli.ts web --panel",
-    "panel:dev": "node scripts/panel-dev.mjs",
+    "panel": "tsx src/cli.ts panel",
     "panel:build": "cd desktop && npx tauri build --no-bundle",
     "test": "node --import tsx --test tests/*.test.ts"
   },

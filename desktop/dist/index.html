@@ -1,1451 +1,168 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark">
-<title>T101 · 对局助手</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%230a1428'/%3E%3Cpath d='M16 3.5 28.5 16 16 28.5 3.5 16z' fill='none' stroke='%23c8aa6e' stroke-width='1.6'/%3E%3Ctext x='16' y='20.5' font-size='11' font-weight='800' fill='%23c8aa6e' text-anchor='middle' font-family='Segoe UI'%3E101%3C/text%3E%3C/svg%3E">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>T101 · 侧边停靠面板</title>
 <style>
-/* ============================================================
-   T101 · 对局助手 — 桌面客户端 UI
-   视觉对齐英雄联盟客户端：深海蓝底 / 黄金描边 / 海克斯科技菱形 / 羊皮纸文字
-   ============================================================ */
-:root {
-  --bg: #010a13;            /* 页面最深层（LOL 客户端底色） */
-  --bg2: #0a1428;           /* 面板海军蓝 */
-  --card: #0d1d31;
-  --card2: #12263c;
-  --panel: #16283d;
-  --border: #1e3349;        /* 面板描边（蓝系） */
-  --border-soft: #15273b;
-  --text: #f0e6d2;          /* 羊皮纸文字 */
-  --dim: #a09b8c;           /* 暗金灰（LOL 次级文字） */
-  --muted: #6f7f8c;
-  --gold: #c8aa6e;          /* LOL 主题金 */
-  --gold-2: #f0e6d2;
-  --cyan: #0ac8b9;          /* 青（我方/强调） */
-  --blue: #0397ab;
-  --green: #39c96b;
-  --red: #e84057;           /* LOL 红（敌方/危险） */
-  --orange: #d8a13a;
-  --shadow: 0 12px 30px rgba(0, 0, 0, .45);
-  --font-h: "Beaufort for LOL", "Microsoft YaHei", "PingFang SC", sans-serif;
-  --font-b: "Spiegel", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
-}
-
-* { margin: 0; padding: 0; box-sizing: border-box; }
-html { height: 100%; }
-body {
-  min-height: 100vh;
-  background:
-    radial-gradient(120% 65% at 50% -12%, rgba(14, 42, 74, .5), transparent 62%),
-    repeating-linear-gradient(115deg, rgba(200, 170, 110, .016) 0 1px, transparent 1px 22px),
-    linear-gradient(180deg, #020a14 0%, #010a13 42%, #030d1a 100%);
-  color: var(--text);
-  font-family: var(--font-b);
-  font-size: 13px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
-}
-button, input, select { font-family: inherit; }
-button { transition: background-color .15s, color .15s, border-color .15s, transform .12s, box-shadow .15s; }
-img { display: block; }
-::selection { background: rgba(10, 200, 185, .28); }
-::-webkit-scrollbar { width: 9px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #1c2f45; border-radius: 5px; border: 2px solid #010a13; }
-::-webkit-scrollbar-thumb:hover { background: #2a4564; }
-::-webkit-scrollbar-corner { background: transparent; }
-
-/* ============ 标题栏（无边框窗口拖拽区，LOL 客户端顶栏语言） ============ */
-.topbar {
-  position: sticky; top: 0; z-index: 60;
-  display: flex; align-items: center; gap: 7px;
-  padding: 6px 9px;
-  background: linear-gradient(180deg, rgba(13, 29, 49, .96), rgba(6, 14, 26, .96));
-  border-bottom: 1px solid rgba(200, 170, 110, .26);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, .45);
-  user-select: none; -webkit-user-select: none;
-}
-.topbar::before {
-  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 2px;
-  background: linear-gradient(90deg, transparent 2%, rgba(200, 170, 110, .55) 32%, rgba(10, 200, 185, .45) 68%, transparent 98%);
-  pointer-events: none;
-}
-.brand { display: flex; align-items: center; gap: 8px; padding: 1px 0; }
-.brand-mark {
-  width: 28px; height: 28px; flex: none;
-  display: grid; place-items: center;
-  background: linear-gradient(160deg, #142a44, #0a1628);
-  border: 1px solid rgba(200, 170, 110, .65);
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);   /* 海克斯菱形 */
-  color: var(--gold); font-size: 9.5px; font-weight: 800; letter-spacing: .4px;
-}
-.brand-copy { display: flex; flex-direction: column; line-height: 1.18; min-width: 0; }
-.brand-copy strong { font-family: var(--font-h); font-size: 13px; letter-spacing: .9px; color: #f4ead8; white-space: nowrap; }
-.brand-copy span { font-size: 8.5px; letter-spacing: 1.6px; color: var(--dim); text-transform: uppercase; white-space: nowrap; }
-.brand-copy span { display: none; }   /* 窄窗省略副标题 */
-
-.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 7px; min-width: 0; }
-.status {
-  display: flex; align-items: center; gap: 6px; min-width: 0;
-  font-size: 11px; color: var(--dim); white-space: nowrap;
-}
-.status-label { display: none; }
-.dot { width: 7px; height: 7px; border-radius: 50%; background: #3c4a5a; flex: none; transition: background .2s, box-shadow .2s; }
-.dot.on { background: var(--green); box-shadow: 0 0 7px rgba(57, 201, 107, .85); }
-.dot.off { background: #465263; }
-#lcuText {
-  min-width: 0; max-width: 92px; flex-shrink: 1;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.phase-badge {
-  flex: none;
-  display: inline-flex; align-items: center;
-  padding: 3px 8px; font-size: 10px; font-weight: 700; letter-spacing: .8px;
-  color: var(--gold); background: rgba(200, 170, 110, .09);
-  border: 1px solid rgba(200, 170, 110, .42); border-radius: 2px;
-  white-space: nowrap;
-}
-.switch { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--dim); cursor: pointer; user-select: none; flex: none; }
-.switch input { position: absolute; opacity: 0; pointer-events: none; }
-.switch-track {
-  position: relative; width: 26px; height: 14px; border-radius: 8px;
-  background: #24354a; transition: background .18s;
-}
-.switch-track::after {
-  content: ''; position: absolute; top: 2px; left: 2px;
-  width: 10px; height: 10px; border-radius: 50%;
-  background: #aeb9c4; box-shadow: 0 1px 2px rgba(0, 0, 0, .4);
-  transition: left .18s, background .18s;
-}
-.switch input:checked + .switch-track { background: rgba(10, 200, 185, .5); }
-.switch input:checked + .switch-track::after { left: 14px; background: #e2fffc; }
-.switch span:not(.switch-track) { display: none; }   /* 窄窗仅显示开关 */
-
-.panel-tools { display: flex; gap: 3px; flex: none; }
-.panel-tools button {
-  min-width: 25px; height: 25px; padding: 0 5px;
-  display: grid; place-items: center; gap: 3px;
-  background: rgba(255, 255, 255, .035);
-  border: 1px solid rgba(160, 155, 140, .3); border-radius: 2px;
-  color: var(--dim); font-size: 11px; line-height: 1; cursor: pointer;
-}
-.panel-tools button:hover { border-color: rgba(200, 170, 110, .65); color: var(--gold); background: rgba(200, 170, 110, .09); }
-.panel-tools button:active { transform: translateY(1px); }
-.panel-tools .bt { display: none; }
-.panel-tools #panelDock.on { border-color: rgba(10, 200, 185, .6); color: #7fe8dd; background: rgba(10, 200, 185, .1); }
-.panel-tools #panelClose:hover { border-color: rgba(232, 64, 87, .65); color: var(--red); background: rgba(232, 64, 87, .1); }
-
-/* 窗口加宽后恢复文字 */
-@media (min-width: 620px) {
-  .brand-copy span { display: block; }
-  .status-label { display: inline; }
-  .switch span:not(.switch-track) { display: inline; }
-  .panel-tools .bt { display: inline; }
-  .panel-tools .gi { display: none; }
-  #lcuText { max-width: 160px; }
-}
-
-/* ============ 布局 ============ */
-.wrap { padding: 12px 12px 52px; }
-section.tab { display: none; }
-section.tab.active { display: block; animation: fade .2s ease; }
-@keyframes fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
-.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-
-/* ============ 面板标题 ============ */
-.stage-panel h3, .subpanel h3 {
-  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
-  margin-bottom: 11px; padding-bottom: 7px;
-  border-bottom: 1px solid rgba(200, 170, 110, .16);
-  font-family: var(--font-h);
-  font-size: 12.5px; font-weight: 700; letter-spacing: 1.1px;
-  color: var(--gold); text-transform: uppercase;
-}
-.stage-panel h3 .hint, .subpanel h3 .hint {
-  font-family: var(--font-b); font-size: 10.5px; font-weight: 400;
-  letter-spacing: .2px; color: var(--dim); text-transform: none;
-}
-
-/* ============ 对局主视图：状态栏 + 流程指示条 ============ */
-.stage-top {
-  position: relative;
-  margin-bottom: 12px; padding: 13px 14px 12px;
-  background:
-    repeating-linear-gradient(115deg, transparent 0 26px, rgba(255, 255, 255, .012) 26px 27px),
-    linear-gradient(180deg, #0e2138, #0a1628);
-  border: 1px solid rgba(200, 170, 110, .22);
-  border-top: 2px solid rgba(200, 170, 110, .6);
-  border-radius: 3px;
-  box-shadow: var(--shadow);
-}
-.stage-top .phase-badge { background: rgba(200, 170, 110, .08); }
-.stage-top .sub { color: #9aabb5; }
-.st-timer {
-  font-size: 26px; font-weight: 800; color: var(--gold);
-  font-variant-numeric: tabular-nums; letter-spacing: .5px; line-height: 1.1;
-  text-shadow: 0 0 16px rgba(200, 170, 110, .35);
-}
-.st-timer.warn { color: var(--red); text-shadow: 0 0 16px rgba(232, 64, 87, .55); animation: blink 1s ease-in-out infinite; }
-@keyframes blink { 50% { opacity: .45; } }
-
-/* 流程条：海克斯菱形节点 + 连接线 */
-.flow { display: flex; margin-top: 13px; }
-.flow i { display: none; }
-.flow .fp {
-  flex: 1; position: relative; min-width: 0;
-  padding: 16px 2px 0; text-align: center;
-  font-size: 10px; letter-spacing: .7px; color: var(--muted);
-  white-space: nowrap; transition: color .2s;
-}
-.flow .fp::before {
-  content: ''; position: absolute; top: 0; left: 50%;
-  width: 9px; height: 9px; transform: translateX(-50%) rotate(45deg);
-  background: #0a1628; border: 1px solid #2c4158;
-  transition: background .2s, border-color .2s, box-shadow .2s;
-}
-.flow .fp::after {
-  content: ''; position: absolute; top: 4px; left: calc(50% + 7px);
-  width: calc(100% - 14px); height: 1px; background: #1c2f45;
-}
-.flow .fp:last-child::after { display: none; }
-.flow .fp.done { color: #7fc9c4; }
-.flow .fp.done::before { border-color: var(--cyan); background: rgba(10, 200, 185, .9); box-shadow: 0 0 7px rgba(10, 200, 185, .5); }
-.flow .fp.done::after { background: rgba(10, 200, 185, .38); }
-.flow .fp.cur { color: var(--gold); font-weight: 700; }
-.flow .fp.cur::before { border-color: var(--gold); background: var(--gold); box-shadow: 0 0 9px rgba(200, 170, 110, .7); }
-.flow .fp.cur::after { background: rgba(200, 170, 110, .4); }
-
-/* ============ 输入与按钮（LOL 斜切描边风格） ============ */
-button {
-  min-height: 32px; padding: 6px 12px;
-  background: linear-gradient(180deg, #172c44, #0e1d30);
-  border: 1px solid rgba(160, 155, 140, .38); border-radius: 2px;
-  color: var(--dim); font-size: 12.5px; cursor: pointer;
-}
-button:hover { border-color: rgba(200, 170, 110, .7); color: var(--gold); background: linear-gradient(180deg, #1d3650, #132840); }
-button:active { transform: translateY(1px); }
-.mini {
-  font-size: 10px; padding: 1px 8px; border-radius: 2px;
-  border: 1px solid var(--border); background: rgba(255, 255, 255, .03);
-  color: var(--dim); cursor: pointer; vertical-align: 1px; min-height: 0;
-}
-.mini:hover { color: var(--cyan); border-color: rgba(10, 200, 185, .5); }
-
-/* ============ 英雄头像通用描边 ============ */
-.chip img, .hero-card img, .slot img, .ban-slot img, .mp-ic, .recent-row .ri {
-  border: 1px solid rgba(200, 170, 110, .34);
-}
-
-/* ============ 选人棋盘（5v5 楼序，蓝上红下） ============ */
-.board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
-#stMyBoard, #stEnemyBoard { margin-top: 12px; }
-#stMyBoard::before, #stEnemyBoard::before {
-  grid-column: 1 / -1;
-  font-size: 10px; font-weight: 700; letter-spacing: 1.6px; margin-bottom: 3px;
-}
-#stMyBoard::before { content: '我方阵容'; color: #7fd4ce; }
-#stEnemyBoard { margin-top: 15px; padding-top: 11px; border-top: 1px dashed rgba(160, 155, 140, .22); }
-#stEnemyBoard::before { content: '对方阵容'; color: #f08793; }
-.slot {
-  position: relative; min-width: 0; text-align: center;
-  background: rgba(255, 255, 255, .025);
-  border: 1px solid rgba(160, 155, 140, .22); border-radius: 3px;
-  padding: 8px 3px 7px;
-  transition: border-color .15s, box-shadow .15s, background .15s;
-}
-#stMyBoard .slot { border-color: rgba(10, 200, 185, .26); }
-#stEnemyBoard .slot { border-color: rgba(232, 64, 87, .26); }
-.slot img { width: 40px; height: 40px; margin: 0 auto; border-radius: 3px; object-fit: cover; }
-.slot .nm {
-  margin-top: 6px; font-size: 10.5px; color: #e8e0cf;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.slot .ln { margin-top: 1px; font-size: 9.5px; color: var(--muted); }
-.slot.me { border-color: rgba(3, 151, 171, .65); background: rgba(3, 151, 171, .08); }
-.slot.sel { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(200, 170, 110, .2); }
-.slot.acting { border-color: var(--gold); animation: actingPulse 1.3s ease-in-out infinite; }
-@keyframes actingPulse {
-  0%, 100% { box-shadow: 0 0 11px rgba(200, 170, 110, .32); }
-  50% { box-shadow: 0 0 3px rgba(200, 170, 110, .14); }
-}
-.slot .tag {
-  position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
-  background: var(--gold); color: #241a08;
-  font-size: 9px; font-weight: 700; letter-spacing: .4px;
-  padding: 1px 6px; border-radius: 1px; white-space: nowrap;
-}
-.slot .cardback {
-  width: 40px; height: 40px; margin: 0 auto;
-  border-radius: 3px; border: 1px solid rgba(200, 170, 110, .55);
-  background: linear-gradient(135deg, #16283d, #0a1428);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 16px; color: var(--gold);
-}
-.slot.flipped img { border-color: var(--gold); box-shadow: 0 0 8px rgba(200, 170, 110, .42); }
-
-/* ============ 禁用棋盘：蓝 5 + 红 5 ============ */
-.ban-board { display: grid; grid-template-columns: 1fr; gap: 10px; }
-@media (min-width: 620px) { .ban-board { grid-template-columns: 1fr 1fr; } }
-.ban-side {
-  background: rgba(255, 255, 255, .02);
-  border: 1px solid var(--border); border-radius: 3px; padding: 9px;
-}
-.ban-side:first-child { border-color: rgba(10, 200, 185, .3); }
-.ban-side:last-child { border-color: rgba(232, 64, 87, .3); }
-.ban-slots { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
-.ban-slot {
-  aspect-ratio: 3/4; position: relative;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  border: 1px dashed rgba(160, 155, 140, .32); border-radius: 3px;
-  background: rgba(0, 0, 0, .28);
-}
-.ban-slot.filled { border: 1px solid rgba(232, 64, 87, .52); background: rgba(232, 64, 87, .07); }
-.ban-slot img { width: 42px; height: 42px; border-radius: 3px; object-fit: cover; }
-.ban-slot .nm {
-  font-size: 10px; color: #e8e0cf;
-  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.ban-slot .order {
-  position: absolute; top: 3px; left: 5px;
-  font-size: 9px; color: var(--muted); font-variant-numeric: tabular-nums;
-}
-
-/* ============ 选人轮次条 ============ */
-.rounds { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
-.round {
-  font-size: 11px; letter-spacing: .5px;
-  border: 1px solid var(--border); border-radius: 2px;
-  padding: 3px 8px; color: var(--muted); background: rgba(255, 255, 255, .02);
-}
-.round.blue { color: #7fd4ce; border-color: rgba(10, 200, 185, .42); }
-.round.red { color: #f08793; border-color: rgba(232, 64, 87, .42); }
-.round.cur { color: #241a08; background: var(--gold); border-color: var(--gold); font-weight: 700; box-shadow: 0 0 10px rgba(200, 170, 110, .35); }
-.round.done { opacity: .38; text-decoration: line-through; }
-
-/* ============ 推荐卡片 ============ */
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 8px; }
-.hero-card {
-  position: relative; text-align: center;
-  background: linear-gradient(180deg, rgba(18, 38, 60, .62), rgba(10, 20, 40, .62));
-  border: 1px solid var(--border); border-radius: 3px;
-  padding: 10px 8px;
-  transition: transform .15s, border-color .15s, box-shadow .15s;
-}
-.hero-card:hover { transform: translateY(-2px); border-color: rgba(10, 200, 185, .6); box-shadow: 0 6px 16px rgba(0, 0, 0, .38); }
-.hero-card img { width: 52px; height: 52px; margin: 0 auto 7px; border-radius: 3px; object-fit: cover; }
-.hero-card .name { font-size: 12.5px; font-weight: 700; color: #f0e6d2; }
-.hero-card .lane { font-size: 10px; color: var(--muted); margin-top: 2px; }
-.hero-card .win { font-size: 13px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
-.hero-card .counters { font-size: 10px; color: var(--dim); margin-top: 4px; line-height: 1.55; }
-.hero-card .rank {
-  position: absolute; top: 6px; left: 6px; z-index: 2;
-  font-size: 9.5px; font-weight: 700; padding: 1px 6px; border-radius: 1px;
-  background: rgba(1, 10, 19, .8); border: 1px solid rgba(200, 170, 110, .42);
-  color: var(--gold);
-}
-.tier-badge {
-  display: inline-block; margin-top: 5px;
-  font-size: 10px; font-weight: 800; letter-spacing: .5px;
-  padding: 1px 7px; border-radius: 1px;
-}
-.t0 { background: rgba(232, 64, 87, .16); color: #ff8b97; border: 1px solid rgba(232, 64, 87, .42); }
-.t1 { background: rgba(200, 170, 110, .16); color: var(--gold); border: 1px solid rgba(200, 170, 110, .48); }
-.t2 { background: rgba(10, 200, 185, .13); color: #7fe8dd; border: 1px solid rgba(10, 200, 185, .36); }
-.t3 { background: rgba(160, 155, 140, .12); color: var(--dim); border: 1px solid rgba(160, 155, 140, .3); }
-.t4 { background: rgba(160, 155, 140, .06); color: #6b7784; border: 1px solid rgba(160, 155, 140, .18); }
-.win-hi { color: var(--green); } .win-lo { color: var(--red); } .win-mid { color: #d8cfb8; }
-
-/* ============ 徽章 chips ============ */
-.chips { display: flex; gap: 6px; flex-wrap: wrap; }
-.chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 3px 9px 3px 3px;
-  background: rgba(255, 255, 255, .03); border: 1px solid var(--border);
-  border-radius: 2px; font-size: 11.5px; color: var(--text);
-}
-.chip img { width: 24px; height: 24px; border-radius: 2px; }
-.chip.red { border-color: rgba(232, 64, 87, .45); }
-.chip.blue { border-color: rgba(10, 200, 185, .45); }
-
-/* ============ 加载进度条 ============ */
-.load-progress {
-  height: 8px; border-radius: 2px; overflow: hidden;
-  background: #0a1428; border: 1px solid rgba(200, 170, 110, .28);
-  margin-bottom: 12px;
-}
-.load-bar {
-  height: 100%; width: 0; border-radius: 2px;
-  background: linear-gradient(90deg, var(--cyan), var(--gold));
-  box-shadow: 0 0 8px rgba(200, 170, 110, .55);
-  animation: loadfill 1.4s ease-in-out infinite;
-}
-@keyframes loadfill { 0% { width: 5%; } 50% { width: 65%; } 100% { width: 5%; } }
-
-/* ============ 逐场战绩明细 ============ */
-.recent-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
-.recent-row {
-  border-radius: 2px; background: rgba(255, 255, 255, .02);
-  border-left: 3px solid #3a4553;
-}
-.recent-row.win { border-left-color: var(--green); }
-.recent-row.lose { border-left-color: var(--red); }
-.recent-row .recent-summary {
-  display: grid; grid-template-columns: 52px 30px 1fr 44px 34px 12px; gap: 5px; align-items: center;
-  padding: 5px 8px; cursor: pointer; list-style: none;
-}
-.recent-row .recent-summary::-webkit-details-marker { display: none; }
-.recent-row .recent-summary::after { content: '▸'; color: var(--muted); justify-self: end; font-size: 10px; transition: transform .15s; }
-.recent-row[open] .recent-summary::after { content: '▾'; }
-.recent-row .rt { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.recent-row .rm { display: none; }
-.recent-row .ri { width: 26px; height: 26px; border-radius: 2px; object-fit: cover; }
-.recent-row .rh { font-size: 11.5px; color: #e8e0cf; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.recent-row .rk { font-size: 10.5px; color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
-.recent-row .rd { display: none; }
-.recent-row .rr { font-size: 11px; font-weight: 700; text-align: right; }
-.recent-row.win .rr { color: var(--green); }
-.recent-row.lose .rr { color: var(--red); }
-.recent-detail {
-  padding: 8px 10px 10px;
-  border-top: 1px dashed rgba(160, 155, 140, .24);
-  margin: 0 8px 6px 36px;
-}
-.recent-detail .rd-line { font-size: 10.5px; color: var(--dim); line-height: 1.85; }
-.recent-detail .rd-items { display: flex; gap: 3px; margin-top: 6px; flex-wrap: wrap; }
-.recent-detail .item-ic {
-  width: 24px; height: 24px; border-radius: 2px;
-  border: 1px solid var(--border); background: rgba(255, 255, 255, .04);
-}
-.type-eval {
-  display: flex; flex-direction: column; gap: 3px;
-  margin-top: 8px; padding: 7px 10px; border-radius: 2px;
-  background: rgba(255, 255, 255, .025); border: 1px solid rgba(200, 170, 110, .14);
-  font-size: 11px; line-height: 1.75; color: var(--dim);
-}
-.type-eval b { color: var(--gold); }
-
-/* ============ 完整对局 10 人（逐场详情） ============ */
-.mp-wrap { display: grid; grid-template-columns: 1fr; gap: 6px; margin-top: 8px; }
-@media (min-width: 620px) { .mp-wrap { grid-template-columns: 1fr 1fr; } }
-.mp-side { border: 1px solid var(--border); border-radius: 3px; padding: 6px; background: rgba(255, 255, 255, .015); }
-.mp-side.blue { border-color: rgba(10, 200, 185, .35); }
-.mp-side.red { border-color: rgba(232, 64, 87, .35); }
-.mp-label { font-size: 10px; letter-spacing: 1px; color: var(--dim); font-weight: 700; margin-bottom: 4px; }
-.mp-row { display: flex; align-items: center; gap: 6px; padding: 3px 4px; border-radius: 2px; }
-.mp-row.self { outline: 1px solid rgba(200, 170, 110, .55); background: rgba(200, 170, 110, .07); }
-.mp-ic { width: 24px; height: 24px; border-radius: 2px; flex: none; object-fit: cover; }
-.mp-info { flex: 1; min-width: 0; }
-.mp-name { font-size: 11px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mp-me { color: var(--gold); font-size: 9px; border: 1px solid var(--gold); border-radius: 2px; padding: 0 3px; margin-left: 2px; }
-.mp-sub { font-size: 9.5px; color: var(--dim); }
-.mp-items { display: flex; gap: 2px; flex: none; }
-.mp-items img { width: 16px; height: 16px; border-radius: 2px; border: 1px solid var(--border); background: rgba(255, 255, 255, .04); }
-
-/* ============ 玩家列表 ============ */
-.team-header { font-size: 12px; font-weight: 700; letter-spacing: 1px; margin: 10px 0 4px; display: flex; align-items: center; gap: 6px; }
-.team-header.blue { color: #7fd4ce; } .team-header.red { color: #f08793; }
-
-/* ============ 房间内页签统计 ============ */
-.lobby-mode-stat { font-size: 9.5px !important; color: var(--muted) !important; line-height: 1.5; }
-
-/* ============ 通用 ============ */
-.msg {
-  padding: 16px; text-align: center;
-  color: var(--dim); font-size: 12.5px; line-height: 1.8;
-  border: 1px dashed rgba(160, 155, 140, .36); border-radius: 3px;
-  background: rgba(255, 255, 255, .015);
-}
-.sub { font-size: 11px; color: var(--dim); }
-.hidden { display: none !important; }
-#stIdleMsgIcon { filter: drop-shadow(0 0 12px rgba(200, 170, 110, .4)); }
-
-/* ============ v2 窄窗布局 ============ */
-body { overflow-y: auto; }
-.topbar {
-  min-height: 44px; padding: 7px 8px; gap: 6px;
-  background: #07131f; border-bottom-color: rgba(10, 200, 185, .24);
-}
-.topbar::before { height: 1px; background: linear-gradient(90deg, transparent, rgba(10, 200, 185, .7), rgba(200, 170, 110, .65), transparent); }
-.brand { gap: 7px; min-width: 63px; }
-.brand-mark { width: 26px; height: 26px; font-size: 8.5px; }
-.brand-copy strong { font-size: 12px; letter-spacing: .6px; }
-.topbar-right { gap: 4px; overflow: hidden; }
-.status { max-width: 70px; gap: 4px; font-size: 10px; }
-#lcuText { max-width: 58px; }
-.phase-badge { max-width: 64px; overflow: hidden; text-overflow: ellipsis; padding: 3px 5px; font-size: 9px; letter-spacing: .2px; }
-.switch { gap: 0; }
-.switch-track { width: 25px; height: 14px; }
-.panel-tools { gap: 2px; }
-.panel-tools button { width: 25px; min-width: 25px; height: 25px; padding: 0; font-size: 10px; }
-.panel-tools button:hover { transform: translateY(-1px); }
-.wrap { padding: 10px 9px 42px; }
-
-.stage-top {
-  margin-bottom: 9px; padding: 10px 11px 9px;
-  border-top-width: 1px; box-shadow: 0 5px 15px rgba(0, 0, 0, .28);
-}
-.stage-summary {
-  display: grid; grid-template-columns: auto auto minmax(0, 1fr);
-  grid-template-rows: auto auto; align-items: center; gap: 4px 7px;
-}
-.stage-summary #stPhase { grid-column: 1; grid-row: 1; }
-.stage-summary #stTimer { grid-column: 2; grid-row: 1; }
-.stage-summary #stMode { grid-column: 3; grid-row: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.stage-summary #stTurn { grid-column: 1 / -1; grid-row: 2; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.st-timer { font-size: 20px; }
-.flow { margin-top: 11px; }
-.flow .fp { padding-top: 14px; font-size: 9px; letter-spacing: 0; }
-.flow .fp::before { width: 8px; height: 8px; }
-.flow .fp::after { top: 3px; left: calc(50% + 6px); width: calc(100% - 12px); }
-
-.stage-panel {
-  margin-bottom: 9px; padding: 10px;
-  background: rgba(9, 25, 42, .82); border: 1px solid #1a354d; border-radius: 4px;
-  box-shadow: 0 5px 16px rgba(0, 0, 0, .22);
-}
-.stage-panel > h3, .subpanel > h3 {
-  margin-bottom: 9px; padding-bottom: 7px; border-bottom-color: rgba(10, 200, 185, .16);
-}
-.subpanel {
-  margin-top: 9px; padding: 9px 10px;
-  background: rgba(255, 255, 255, .018); border: 1px solid #1a354d; border-radius: 3px;
-}
-.subpanel:first-child { margin-top: 0; }
-.subpanel:empty { display: none; }
-.danger-panel { border-color: rgba(232, 64, 87, .3); }
-.success-panel { border-color: rgba(57, 201, 107, .28); }
-.feature-panel { border-color: rgba(200, 170, 110, .5); background: rgba(200, 170, 110, .055); }
-.split-panel { flex: 1; min-width: 0; }
-.idle-message { padding: 27px 16px 21px; border-style: solid; border-color: rgba(200, 170, 110, .22); background: rgba(255, 255, 255, .018); }
-.idle-icon { margin-bottom: 8px; font-size: 34px; line-height: 1; }
-.idle-title { font-size: 14px; font-weight: 700; color: var(--text); }
-.idle-copy { max-width: 280px; margin: 7px auto 0; line-height: 1.65; }
-.idle-foot { display: inline-flex; align-items: center; gap: 6px; margin-top: 15px; color: var(--muted); font-size: 10px; }
-.state-pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 8px rgba(10, 200, 185, .8); }
-
-#stLobbyBoard { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-#stLobbyBoard .slot { display: grid; grid-template-columns: 31px minmax(0, 1fr); grid-template-rows: auto auto auto auto; gap: 0 6px; padding: 7px; text-align: left; }
-#stLobbyBoard .slot img { grid-column: 1; grid-row: 1 / span 4; width: 31px; height: 31px; margin: 0; }
-#stLobbyBoard .slot .nm, #stLobbyBoard .slot .ln { grid-column: 2; }
-#stLobbyBoard .slot .nm { margin-top: 0; }
-#stLobbyBoard .slot .ln { margin-top: 1px; }
-#stLobbyBoard .lobby-mode-stat { font-size: 9px !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ban-board { gap: 7px; }
-.ban-side { padding: 7px; }
-.ban-slots { gap: 3px; }
-.ban-slot { min-width: 0; aspect-ratio: auto; min-height: 65px; gap: 3px; }
-.ban-slot img { width: 32px; height: 32px; }
-.ban-slot .nm { font-size: 9px; }
-#stMyBoard, #stEnemyBoard { gap: 4px; }
-.slot { padding: 7px 2px 6px; }
-.slot img, .slot .cardback { width: 36px; height: 36px; }
-.slot .nm { margin-top: 5px; font-size: 9.5px; }
-.slot .ln { font-size: 9px; }
-.grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-.hero-card { padding: 8px 5px; }
-.hero-card img { width: 44px; height: 44px; margin-bottom: 5px; }
-.hero-card .name { font-size: 11px; }
-.hero-card .win { font-size: 12px; }
-.hero-card .counters { font-size: 9px; }
-#stHex > .row { display: block; }
-#stHex > .row .split-panel { margin-top: 9px; }
-
-/* 加载/游戏中的玩家条目，替代表格横向溢出 */
-.player-list { display: flex; flex-direction: column; gap: 4px; }
-.player-row {
-  display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 7px; align-items: center;
-  min-height: 47px; padding: 6px; background: rgba(255, 255, 255, .025);
-  border: 1px solid rgba(30, 51, 73, .75); border-left: 2px solid var(--border); border-radius: 3px;
-}
-.player-row.self { border-left-color: var(--gold); background: rgba(200, 170, 110, .07); }
-.player-row.blue { border-left-color: rgba(10, 200, 185, .65); }
-.player-row.red { border-left-color: rgba(232, 64, 87, .65); }
-.player-avatar, .player-avatar img { width: 32px; height: 32px; border-radius: 3px; object-fit: cover; }
-.player-avatar { display: grid; place-items: center; background: #14283d; color: var(--gold); font-size: 8px; font-weight: 800; }
-.player-main { min-width: 0; }
-.player-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 700; color: var(--text); }
-.player-hero { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9.5px; color: var(--dim); }
-.player-meta { min-width: 70px; max-width: 145px; text-align: right; font-size: 9px; color: var(--dim); line-height: 1.45; }
-.player-rank { color: var(--gold); white-space: nowrap; }
-.player-recent { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.player-recent b { color: var(--gold); }
-.team-header { margin: 9px 0 4px; padding: 0 3px; font-size: 10px; letter-spacing: 1px; }
-.team-header:first-child { margin-top: 0; }
-#stGamePlayers, #stLoadingBody { overflow: visible; }
-
-@media (min-width: 620px) {
-  #stHex > .row { display: flex; }
-  #stHex > .row .split-panel { margin-top: 0; }
-  #stLobbyBoard { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  #stLobbyBoard .slot { display: block; text-align: center; }
-  #stLobbyBoard .slot img { width: 36px; height: 36px; margin: 0 auto; }
-  #stLobbyBoard .slot .nm { margin-top: 5px; }
-}
+  :root {
+    --bg: #0f1216;
+    --panel: #171c23;
+    --border: #262e38;
+    --text: #d7dee8;
+    --dim: #8b96a5;
+    --accent: #4d9fff;
+    --accent2: #2f81f7;
+    --ok: #3fbf6f;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    user-select: none;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    -webkit-app-region: drag;
+  }
+  .logo {
+    width: 28px; height: 28px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent2), #1b5fc4);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px; color: #fff;
+  }
+  h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.5px; }
+  .sub { font-size: 11px; color: var(--dim); }
+  main { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .status-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--dim);
+    flex-shrink: 0;
+  }
+  .dot.on { background: var(--ok); box-shadow: 0 0 8px rgba(63,191,111,.6); }
+  .dot.off { background: #e05252; box-shadow: 0 0 8px rgba(224,82,82,.5); }
+  .status-label { font-size: 13px; font-weight: 600; }
+  .status-desc { font-size: 11px; color: var(--dim); margin-top: 2px; }
+  .btn {
+    -webkit-app-region: no-drag;
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+  }
+  .btn:hover { background: #1d242d; border-color: var(--accent); }
+  .btn.primary {
+    background: linear-gradient(135deg, var(--accent2), #1b5fc4);
+    border-color: transparent;
+    color: #fff;
+  }
+  .btn.primary:hover { filter: brightness(1.1); }
+  .hint {
+    margin-top: auto;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .hint-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--dim); }
+  kbd {
+    font-family: inherit;
+    font-size: 11px;
+    background: #222a34;
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    padding: 2px 7px;
+    color: var(--text);
+  }
 </style>
 </head>
 <body>
-<div class="topbar">
-  <div class="brand"><div class="brand-mark">101</div><div class="brand-copy"><strong>T101</strong><span>对局助手</span></div></div>
-  <div class="topbar-right">
-    <div class="status" id="lcuStatus"><span class="dot" id="lcuDot"></span><span class="status-label">客户端</span><span id="lcuText">检测中…</span></div>
-    <span class="phase-badge hidden" id="phaseBadge"></span>
-    <label class="switch" title="自动同步（3 秒轮询当前对局）"><input type="checkbox" id="autoRefresh" checked><span class="switch-track"></span><span>自动同步</span></label>
-    <div class="panel-tools">
-      <button id="panelArrange" title="一键排布：客户端窗口左 2/3、面板贴右侧；游戏全屏时仅归位面板"><span class="gi">⛶</span><span class="bt">排布</span></button>
-      <button id="panelDock" title="停靠跟随开关（快捷键 F10）"><span class="gi">⧉</span><span class="bt">停靠</span></button>
-      <button id="panelRefresh" title="重新加载页面"><span class="gi">↻</span><span class="bt">刷新</span></button>
-      <button id="panelClose" title="退出面板（快捷键 Ctrl+Alt+F12）"><span class="gi">✕</span><span class="bt">关闭</span></button>
+  <header>
+    <div class="logo">T</div>
+    <div>
+      <h1>T101 侧边停靠面板</h1>
+      <div class="sub">League of Legends 窗口跟随</div>
     </div>
-  </div>
-</div>
-<div class="wrap">
+  </header>
 
-
-  <!-- ===== 对局（按真实流程：房间 → 禁用 → 选人 → 加载 → 游戏） ===== -->
-  <section class="tab active" id="tab-bp">
-    <!-- 状态栏 + 流程指示条 -->
-    <div class="stage-top">
-      <div class="stage-summary">
-        <span class="phase-badge" id="stPhase">—</span>
-        <span class="st-timer" id="stTimer"></span>
-        <span class="sub" id="stMode"></span>
-        <span class="sub" id="stTurn"></span>
-      </div>
-      <div class="flow" id="stFlow">
-        <span class="fp" data-fp="room">1 房间</span><i>›</i>
-        <span class="fp" data-fp="ban">2 BAN</span><i>›</i>
-        <span class="fp" data-fp="pick">3 PICK</span><i>›</i>
-        <span class="fp" data-fp="load">4 加载</span><i>›</i>
-        <span class="fp" data-fp="game">5 游戏</span>
+  <main>
+    <div class="status-card">
+      <div class="dot" id="dot"></div>
+      <div>
+        <div class="status-label" id="statusText">读取状态中…</div>
+        <div class="status-desc">自动跟随 LOL 客户端 / 游戏窗口右侧</div>
       </div>
     </div>
 
-    <!-- ① 空闲：未在对局 / 匹配中 / 接受确认 -->
-    <div class="stage-panel" id="stIdle">
-      <div class="msg idle-message">
-        <div class="idle-icon" id="stIdleMsgIcon">🕹️</div>
-        <div class="idle-title" id="stIdleMsgTitle">未在对局流程中</div>
-        <div class="idle-copy sub" id="stIdleMsgSub">创建房间后自动跟踪：房间 → 匹配 → 接受 → 禁用/翻牌 → 选人 → 加载 → 游戏</div>
-        <div class="idle-foot"><span class="state-pulse"></span>自动同步已开启</div>
-      </div>
-    </div>
+    <button class="btn primary" id="btnArrange">一键排布（F9）</button>
+    <button class="btn" id="btnDock">暂停 / 恢复跟随（F10）</button>
 
-    <!-- ② 队伍房间：接受对局后队友已就位 -->
-    <div class="stage-panel hidden" id="stLobby">
-      <h3>👥 队伍房间 <span class="hint" id="stLobbyHint"></span></h3>
-      <div class="board" id="stLobbyBoard"></div>
-      <div class="subpanel" id="stTeamEval"></div>
-      <div class="subpanel" id="stRecent"></div>
+    <div class="hint">
+      <div class="hint-row"><span>排布游戏窗口与面板</span><kbd>F9</kbd></div>
+      <div class="hint-row"><span>暂停 / 恢复跟随</span><kbd>F10</kbd></div>
+      <div class="hint-row"><span>退出面板</span><kbd>Ctrl+Alt+F12</kbd></div>
     </div>
-
-    <!-- ③ 禁用阶段（排位）：10 人同时 ban，蓝 5 + 红 5 -->
-    <div class="stage-panel hidden" id="stBan">
-      <h3 style="color:var(--red)">🚫 禁用阶段 <span class="hint">10 人同时选，每人 1 个，共 10 个</span></h3>
-      <div class="ban-board">
-        <div class="ban-side">
-          <div class="sub" style="color:var(--cyan);margin-bottom:6px">🔵 我方</div>
-          <div class="ban-slots" id="stMyBans"></div>
-        </div>
-        <div class="ban-side">
-          <div class="sub" style="color:var(--red);margin-bottom:6px">🔴 对面</div>
-          <div class="ban-slots" id="stEnemyBans"></div>
-        </div>
-      </div>
-      <div class="subpanel danger-panel">
-        <h3 style="color:var(--red)">🛡 推荐 Ban</h3>
-        <div class="grid" id="stBans"></div>
-      </div>
-    </div>
-
-    <!-- ④ 选人阶段（排位）：楼序轮选 B1B2→R1R2R3→B3B4→R4R5→B5 -->
-    <div class="stage-panel hidden" id="stPick">
-      <h3>⚔ 选人阶段 <span class="hint">每轮 30s 倒计时</span></h3>
-      <div class="rounds" id="stRounds"></div>
-      <div class="board" id="stMyBoard" style="margin-top:10px"></div>
-      <div class="board" id="stEnemyBoard" style="margin-top:10px"></div>
-      <div class="subpanel success-panel">
-        <h3 style="color:var(--green)">🎯 推荐 Pick</h3>
-        <div class="grid" id="stPicks"></div>
-      </div>
-    </div>
-
-    <!-- ⑤ 海斗选人：LCU 共享英雄池 → 全员选定英雄 -->
-    <div class="stage-panel hidden" id="stHex">
-      <h3 style="color:var(--gold)">🎴 海斗选人阶段 <span class="hint">共享英雄池由 LCU benchChampions 提供 · 全员从池中选 · 无 Ban</span></h3>
-      <!-- 你的英雄 · 海斗榜推荐（顶部显眼位置） -->
-      <div class="subpanel feature-panel" id="stHexHeroStatCard">
-        <h3 style="color:var(--gold)">🏆 你的英雄 · 海斗榜推荐 <span class="hint">选定英雄后自动展示 · 101 海斗榜官方推荐海克斯</span></h3>
-        <div id="stHexHeroStat"><div class="msg">🎴 选定英雄后，这里展示该英雄的推荐海克斯</div></div>
-      </div>
-      <div class="board" id="stHexBoard"></div>
-      <div class="subpanel success-panel">
-        <h3 style="color:var(--green)">🏊 共享英雄池 · 选择推荐 <span class="hint">仅展示 LCU 当前返回的可选英雄，按推荐分排序</span></h3>
-        <div class="grid" id="stHexPool"></div>
-      </div>
-      <div class="row" style="margin:14px 0 0;gap:14px;align-items:stretch">
-        <div class="subpanel split-panel">
-          <h3 style="color:var(--cyan)">🏆 版本英雄榜 Top 8 <span class="hint">选人参考</span></h3>
-          <div class="grid" id="stHexRefHeroes" style="margin-top:8px"></div>
-        </div>
-        <div class="subpanel split-panel">
-          <h3 style="color:var(--gold)">🤝 最佳拍档 Top 8 <span class="hint">组合胜率</span></h3>
-          <div class="grid" id="stHexRefPartners" style="margin-top:8px"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ⑥ 加载动画：10 人卡片 + 进度条 -->
-    <div class="stage-panel hidden" id="stLoading">
-      <h3>🎬 加载画面 <span class="hint">10 名玩家信息 · 进度条满即进入对局</span></h3>
-      <div class="load-progress"><div class="load-bar" id="stLoadBar"></div></div>
-      <div class="msg hidden" id="stLoadMsg"></div>
-      <div id="stLoadingBody" class="hidden"></div>
-    </div>
-
-    <!-- ⑦ 游戏中：当前对局 10 人（KIWI 加载阶段在 InProgress，随时可查） -->
-    <div class="stage-panel hidden" id="stGame">
-      <div class="subpanel game-panel">
-        <h3 style="color:var(--cyan)">👥 当前对局 10 人 <span class="hint">加载/游戏中实时刷新 · 大乱斗无段位 · 含近期战绩</span></h3>
-        <div id="stGamePlayers"><div class="msg">加载中…</div></div>
-      </div>
-    </div>
-  </section>
-</div>
+  </main>
 
 <script>
-const $ = (id) => document.getElementById(id);
-const heroImg = (alias) => alias ? `https://game.gtimg.cn/images/lol/act/img/champion/${alias}.png` : '';
-const winCls = (v) => v >= 52 ? 'win-hi' : v <= 48 ? 'win-lo' : 'win-mid';
-const tierCls = (t) => ({ T0: 't0', T1: 't1', T2: 't2', T3: 't3', T4: 't4' }[t] || 't3');
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-/** 安全写入（元素可能因浏览器缓存旧版 HTML 不存在 → 绝不抛错，防止轮询循环死亡） */
-const setTxt = (id, v) => { const el = $(id); if (el) el.textContent = v; };
-const setHtml = (id, v) => { const el = $(id); if (el) el.innerHTML = v; };
+  const $ = (id) => document.getElementById(id);
+  const hasTauri = typeof window.__TAURI__ !== 'undefined';
 
-async function api(route, params = {}) {
-  const qs = new URLSearchParams(params).toString();
-  const r = await fetch(`/api/${route}${qs ? '?' + qs : ''}`);
-  const j = await r.json();
-  if (!j.ok) throw new Error(j.error || '请求失败');
-  return j.data;
-}
-
-function heroCard(h, { rank, extra } = {}) {
-  return `<div class="hero-card">
-    ${rank ? `<span class="rank">#${rank}</span>` : ''}
-    <img src="${heroImg(h.alias)}" onerror="this.style.visibility='hidden'">
-    <div class="name">${esc(h.title)}</div>
-    ${h.lane ? `<div class="lane">${esc(h.lane)}</div>` : ''}
-    <div class="win ${winCls(h.winRate)}">${h.winRate.toFixed ? h.winRate.toFixed(2) : h.winRate}%</div>
-    <span class="tier-badge ${tierCls(h.tier)}">${esc(h.tier)}</span>
-    ${extra ? `<div class="counters">${extra}</div>` : ''}
-  </div>`;
-}
-
-function pickExtra(h) {
-  if (!h.counterCount) return '';
-  const mu = (h.matchups || []).map((m) => `${m.enemyTitle} ${m.winRate.toFixed(1)}%`).join('、');
-  return `对位 ${mu}`;
-}
-function banExtra(h) {
-  if (h.matchups && h.matchups.length) {
-    return `威胁: ${h.matchups.map((m) => `${m.myTitle} ${m.winRate.toFixed(1)}%`).join('、')}`;
-  }
-  return `禁用率 ${h.banRate.toFixed ? h.banRate.toFixed(1) : h.banRate}%`;
-}
-/* ---------- LCU 状态轮询 ---------- */
-// 阶段渲染循环统一读取状态：顶部状态和内容视图共用一次请求，避免两个 3 秒轮询互相覆盖。
-let phaseSeq = 0;
-let lcuStatusBusy = false;
-async function lcuStatus() {
-  if (lcuStatusBusy) return curPhase;
-  lcuStatusBusy = true;
-  try {
-    const s = await api('lcu/status');
-    const dot = $('lcuDot'), txt = $('lcuText'), badge = $('phaseBadge');
-    if (s.connected) {
-      curPhase = s.phase;
-      dot.className = 'dot on';
-      txt.textContent = `已连接${s.summoner ? ' · ' + s.summoner + (s.level ? ` (${s.level}级)` : '') : ''}`;
-      const phaseText = { None: '大厅', Lobby: '房间', Matchmaking: '匹配中', ChampSelect: '选人中', GameStart: '加载中', InProgress: '对局中', WaitingForStats: '结算中', Reconnect: '重连中' }[s.phase] || s.phase;
-      badge.textContent = '⏱ ' + phaseText;
-      badge.classList.remove('hidden');
-    } else {
-      curPhase = 'None';
-      dot.className = 'dot off';
-      txt.textContent = '客户端未连接';
-      badge.classList.add('hidden');
+  async function invoke(cmd, args) {
+    if (hasTauri) {
+      return window.__TAURI__.core.invoke(cmd, args || {});
     }
-  } catch { /* 客户端启动/重启瞬间保持上一次内容 */ }
-  finally { lcuStatusBusy = false; }
-  return curPhase;
-}
-
-/* ---------- BP 助手（对局流程视图） ---------- */
-let curPhase = 'None'; // 由 lcuStatus 更新：Lobby/ChampSelect/GameStart/InProgress...
-const LANE_CN = { TOP: '上单', JUNGLE: '打野', MIDDLE: '中单', BOTTOM: '下路', SUPPORT: '辅助', UTILITY: '辅助', none: '?', fill: '补位', NONE: '?', FILL: '补位' };
-
-/** 选人棋盘格子 */
-function slotHTML(p, d) {
-  return `<div class="slot ${p.isMe ? 'me' : ''} ${p.acting ? 'acting' : ''}">
-    ${p.acting ? '<span class="tag">▶ 操作中</span>' : ''}
-    ${p.championId > 0
-      ? `<img src="${heroImg(d.heroAliases[p.championId] || '')}" onerror="this.style.visibility='hidden'">`
-      : '<div style="height:40px"></div>'}
-    <div class="nm">${esc(p.summonerName)}${p.isMe ? ' (我)' : ''}</div>
-    <div class="ln">${LANE_CN[p.lane] || esc(p.lane || '?')}</div>
-  </div>`;
-}
-
-/** 海斗当前选人：棋盘只展示玩家已经选定的英雄，不将其当作共享池 */
-function hexFlipHTML(p, d) {
-  const selected = p.championId > 0;
-  return `<div class="slot ${p.isMe ? 'me' : ''} ${selected ? 'flipped' : ''}">
-    ${selected
-      ? `<img src="${heroImg(d.heroAliases[p.championId] || '')}" onerror="this.style.visibility='hidden'"><span class="tag" style="background:var(--gold);color:#1a1205">已选定</span>`
-      : '<div class="cardback">?</div>'}
-    <div class="nm">${esc(p.summonerName)}${p.isMe ? ' (我)' : ''}</div>
-    <div class="ln">${selected ? '已从共享池选定' : '待选择…'}</div>
-  </div>`;
-}
-
-/** 海斗共享池推荐卡片（英雄选择推荐：推荐序号 + 综合分 + 胜率 + 推荐牌 + 最佳搭档） */
-function hexPoolCard(h) {
-  return `<div class="hero-card">
-    <span class="rank">#${h.rank}${h.rank === 1 && h.score !== null ? ' 推荐' : ''}</span>
-    <img src="${heroImg(h.alias)}" onerror="this.style.visibility='hidden'">
-    <div class="name">${esc(h.title)}</div>
-    <div class="win ${winCls(h.winRate)}">${h.winRate !== null ? h.winRate.toFixed(2) + '%' : '—'}</div>
-    <div class="counters">登场 ${h.pickRate !== null ? h.pickRate.toFixed(2) + '%' : '—'}</div>
-    ${h.score !== null
-      ? `<div class="counters" style="color:var(--gold)">⭐ 推荐分 ${h.score}</div>`
-      : '<div class="counters" style="color:var(--muted)">无榜数据</div>'}
-    ${h.bestAugments.length ? `<div class="counters" style="color:var(--gold)">🃏 ${h.bestAugments.slice(0, 2).map((a) => esc(a.name_cn)).join('、')}</div>` : ''}
-    ${h.bestPartners && h.bestPartners.length ? `<div class="counters">🤝 ${h.bestPartners.slice(0, 2).map((p) => esc(p.title)).join('、')}</div>` : ''}
-  </div>`;
-}
-
-/* ---------- 对局主视图：按真实流程阶段驱动（房间→匹配→接受→禁用→选人→加载→游戏） ---------- */
-/** 流程条按模式区分：排位有禁用，海斗无禁用（翻牌替代）；匹配/接受两阶段共用 */
-const FLOWS = {
-  normal: [['room', '1 房间'], ['queue', '2 匹配'], ['accept', '3 接受'], ['ban', '4 BAN'], ['pick', '5 PICK'], ['load', '6 加载'], ['game', '7 游戏']],
-  hex: [['room', '1 房间'], ['queue', '2 匹配'], ['accept', '3 接受'], ['flip', '4 PICK'], ['load', '5 加载'], ['game', '6 游戏']],
-};
-let flowKey = 'normal';
-function setFlow(key, stageKey) {
-  flowKey = FLOWS[key] ? key : 'normal';
-  const flow = FLOWS[flowKey];
-  const curIdx = flow.findIndex(([k]) => k === stageKey);
-  $('stFlow').innerHTML = flow.map(([k, label], i) => {
-    const cls = [];
-    if (curIdx >= 0 && i < curIdx) cls.push('done');
-    if (i === curIdx) cls.push('cur');
-    return `<span class="fp ${cls.join(' ')}">${label}</span>${i < flow.length - 1 ? '<i>›</i>' : ''}`;
-  }).join('');
-}
-
-function showStage(stage) {
-  $('stIdle').classList.toggle('hidden', stage !== 'idle');
-  $('stLobby').classList.toggle('hidden', stage !== 'lobby');
-  $('stBan').classList.toggle('hidden', stage !== 'ban');
-  $('stPick').classList.toggle('hidden', stage !== 'pick');
-  $('stHex').classList.toggle('hidden', stage !== 'hex');
-  $('stLoading').classList.toggle('hidden', stage !== 'loading');
-  $('stGame').classList.toggle('hidden', stage !== 'game');
-}
-
-/** ban 大槽位（蓝 5 + 红 5） */
-function banSlotGrid(bans, d) {
-  const slots = [];
-  for (let i = 0; i < 5; i++) {
-    const id = bans[i] || 0;
-    slots.push(id > 0
-      ? `<div class="ban-slot filled"><span class="order">#${i + 1}</span><img src="${heroImg(d.heroAliases[id] || '')}" onerror="this.style.visibility='hidden'"><div class="nm">${esc(d.heroNames[id] || id)}</div></div>`
-      : `<div class="ban-slot"><span class="order">#${i + 1}</span><div class="nm" style="color:var(--dim)">待禁用</div></div>`);
+    return null; // 浏览器中打开时无后端
   }
-  return slots.join('');
-}
 
-/** 选人轮次条（排位 5v5 楼序 B1B2→R1R2R3→B3B4→R4R5→B5） */
-const PICK_ROUNDS = [
-  { label: 'B1 B2', team: 'blue', start: 0, end: 2 },
-  { label: 'R1 R2 R3', team: 'red', start: 2, end: 5 },
-  { label: 'B3 B4', team: 'blue', start: 5, end: 7 },
-  { label: 'R4 R5', team: 'red', start: 7, end: 9 },
-  { label: 'B5', team: 'blue', start: 9, end: 10 },
-];
-
-async function renderIdle() {
-  showStage('idle');
-  setFlow(flowKey, ''); // 回到空闲：流程条不保留任何高亮
-  $('stPhase').textContent = '—';
-  $('stMode').textContent = '';
-  $('stTimer').textContent = '';
-  $('stTurn').textContent = '';
-  setTxt('stIdleMsgIcon', '🕹️');
-  setTxt('stIdleMsgTitle', '未在对局流程中');
-  setHtml('stIdleMsgSub', '创建房间后自动跟踪：<b>房间 → 匹配 → 接受 → 禁用/翻牌 → 选人 → 加载 → 游戏</b>');
-}
-
-/** 匹配中：流程条显示「匹配」，展示排队模式与队伍就位情况 */
-async function renderMatchmaking(obsolete = () => false) {
-  showStage('idle');
-  $('stPhase').textContent = '🔍 匹配中…';
-  $('stTimer').textContent = '';
-  $('stTurn').textContent = '';
-  setFlow(flowKey, 'queue');
-  setTxt('stIdleMsgIcon', '🔍');
-  setTxt('stIdleMsgTitle', '正在匹配…');
-  setHtml('stIdleMsgSub', '找到对局后自动进入接受确认');
-  try {
-    const l = await api('lobby');
-    if (obsolete()) return;
-    setFlow(queueFamilyOf(l.queueId) === 'hextech' ? 'hex' : 'normal', 'queue');
-    $('stMode').textContent = `模式: ${l.modeLabel}`;
-    setTxt('stIdleMsgTitle', '正在匹配…');
-    setHtml('stIdleMsgSub', `${l.members.length}/5 人已就位 · 找到对局后自动进入接受确认`);
-  } catch { /* 保持默认文案 */ }
-}
-
-/** 接受确认：显示状态 + 倒计时（超时未接受自动拒绝） */
-async function renderReadyCheck(obsolete = () => false) {
-  showStage('idle');
-  $('stPhase').textContent = '📲 对局匹配成功';
-  $('stTurn').textContent = '';
-  setFlow(flowKey, 'accept');
-  setTxt('stIdleMsgIcon', '📲');
-  setTxt('stIdleMsgTitle', '对局匹配成功 — 等待接受');
-  setHtml('stIdleMsgSub', '请在倒计时内点击「接受」');
-  try {
-    const rc = await api('readycheck');
-    if (obsolete()) return;
-    const state = String(rc?.state ?? '');
-    const resp = String(rc?.playerResponse ?? '');
-    const timer = Number(rc?.timer ?? 0);
-    if (Number.isFinite(timer) && timer > 0) {
-      $('stTimer').textContent = `${timer}s`;
-      $('stTimer').classList.toggle('warn', timer <= 10);
-    }
-    if (state === 'declined') {
-      setTxt('stIdleMsgTitle', '❌ 对局已拒绝');
-      setHtml('stIdleMsgSub', '可重新开始寻找');
-    } else if (resp === 'accepted') {
-      setTxt('stIdleMsgTitle', '✅ 已接受，等待其他玩家确认…');
-      setHtml('stIdleMsgSub', `${timer}s · 全员接受后进入选人`);
-    }
-  } catch { /* 保持默认文案 */ }
-}
-
-function queueFamilyOf(q) {
-  if (q === 420 || q === 440) return 'ranked';
-  if (q === 2400 || q === 2410) return 'hextech';
-  return '';
-}
-/** 排位/海斗两组展示顺序：firstFam（当前房间类型）在前，另一类型在后 */
-function typeOrder(firstFam) {
-  return firstFam === 'hextech'
-    ? [['hextech', '🃏 海斗'], ['ranked', '🏆 排位']]
-    : [['ranked', '🏆 排位'], ['hextech', '🃏 海斗']];
-}
-
-/** 房间队友卡片：展示排位/海斗两组近期状态，当前房间类型优先，点击查看明细 */
-function lobbyCard(m, sel) {
-  const b = m.byType;
-  const modeLabel = lobbyData?.modeLabel || '当前模式';
-  const line = (key, label) => {
-    const x = b ? b[key] : null;
-    const last = b ? b[key + 'LastDays'] : null;
-    return x
-      ? `${label} ${x.totalGames}场 ${x.winRate.toFixed(0)}% KDA ${x.kda}`
-      : `${label} ${last != null ? `上次${last}天` : '无记录'}`;
-  };
-  return `<div class="slot ${m.isMe ? 'me' : ''} ${sel ? 'sel' : ''}" style="cursor:pointer" onclick="selectMember(${m.summonerId})" title="点击查看${esc(modeLabel)}近期战绩">
-    <img src="${m.icon ? `https://game.gtimg.cn/images/lol/act/img/profileicon/${m.icon}.png` : ''}" onerror="this.style.visibility='hidden'">
-    <div class="nm">${esc(m.name)}${m.isMe ? ' (我)' : ''}</div>
-    <div class="ln">Lv.${m.level ?? '-'}</div>
-    ${typeOrder(queueFamilyOf(lobbyData?.queueId)).map(([k, l]) => `<div class="ln lobby-mode-stat">${line(k, l)}</div>`).join('')}
-  </div>`;
-}
-
-let lobbyData = null;
-let selMemberId = null;
-let lastLobbyFp = '';
-
-function loadMemberRecent(entry, force = false) {
-  if (!entry) { $('stRecent').innerHTML = ''; return; }
-  loadRecentPanel({
-    key: `r:${entry.summonerId}:${lobbyData?.queueId ?? ''}`,
-    id: entry.summonerId,
-    name: entry.name,
-    queueId: lobbyData?.queueId ?? '',
-    modeLabel: lobbyData?.modeLabel ?? '',
-    force,
-  });
-}
-
-function refreshMemberRecent() {
-  const m = (lobbyData?.members ?? []).find((x) => x.summonerId === selMemberId);
-  if (m) loadMemberRecent(m, true);
-}
-
-function selectMember(id) {
-  const m = (lobbyData?.members ?? []).find((x) => x.summonerId === id);
-  if (!m) return;
-  selMemberId = id;
-  $('stLobbyBoard').innerHTML = lobbyData.members.map((mm) => lobbyCard(mm, mm.summonerId === id)).join('');
-  loadMemberRecent(m);
-}
-
-async function renderLobby(obsolete = () => false) {
-  const d = await api('lobby');
-  if (obsolete()) return; // 阶段已切换：丢弃过期房间视图
-  // 性能：关键数据无变化时跳过 DOM 重建（房间 3s 轮询，避免每轮全量渲染）
-  const fp = JSON.stringify([
-    d.queueId, d.modeLabel, d.members.length,
-    ...d.members.map((m) => [m.summonerId, m.name, m.level, m.stats?.score, m.stats?.winRate, m.stats?.kda, m.stats?.modeGames, m.byType?.ranked?.score, m.byType?.hextech?.score]),
-  ]);
-  if (fp === lastLobbyFp && lobbyData) return;
-  lastLobbyFp = fp;
-  // 队友战绩有更新：清掉逐场明细缓存，避免 60s 内点开还是旧战绩
-  clearRecentCache((k) => k.startsWith('r:'));
-  lobbyData = d;
-  showStage('lobby');
-  setFlow(d.mode === 'hextech_aram' ? 'hex' : 'normal', 'room');
-  $('stPhase').textContent = '👥 队伍房间';
-  $('stMode').textContent = `模式: ${d.modeLabel}`;
-  $('stTimer').textContent = '';
-  $('stTurn').textContent = `${d.members.length}/5 人已就位 · 点击卡片看近期战绩`;
-  $('stLobbyHint').textContent = `${d.modeLabel} · 接受对局后队友已进入房间 · 近期战绩评估`;
-  const sel = selMemberId ?? d.members.find((x) => x.isMe)?.summonerId ?? null;
-  selMemberId = sel;
-  $('stLobbyBoard').innerHTML = d.members.map((m) => lobbyCard(m, m.summonerId === sel)).join('');
-  // 默认选中自己时懒加载一次明细；已选玩家不变则复用前端缓存（服务端 5 分钟缓存兜底）
-  const cur = d.members.find((x) => x.summonerId === selMemberId);
-  if (cur) loadMemberRecent(cur);
-  const t = d.team;
-  $('stTeamEval').innerHTML = t
-    ? `<h3>🧭 队伍状态评估</h3>
-       <div class="sub" style="margin-top:6px">${t.verdict} · 平均分 <b style="color:var(--gold)">${t.avgScore}</b>${t.best ? ` · 状态最好: <b style="color:var(--green)">${esc(t.best)}</b>` : ''}${t.worst ? ` · 需留意: <b style="color:var(--red)">${esc(t.worst)}</b>` : ''}</div>`
-    : '';
-}
-
-async function renderChampSelect(obsolete = () => false) {
-  const d = await api('champselect');
-  if (obsolete()) return; // 已进入加载/游戏中：丢弃过期选人视图（旧请求回写是“加载还显示 pick”的根因）
-  $('stPhase').textContent = d.timerPhase;
-  $('stMode').textContent = `模式: ${d.modeLabel} · 段位: ${d.tierName} · 我方位置: ${d.myLane === 'ALL' ? '未分配' : LANE_CN[d.myLane] || d.myLane}`;
-  $('stTimer').textContent = d.timeLeftSec > 0 ? `${d.timeLeftSec}s` : '';
-  $('stTimer').classList.toggle('warn', d.timeLeftSec > 0 && d.timeLeftSec <= 10);
-  const act = d.currentAction;
-  $('stTurn').textContent = act
-    ? `第 ${d.completedActions + 1}/${d.totalActions} 手 · ${act.isAlly ? '🔵我方' : '🔴对面'} ${LANE_CN[act.lane] || act.lane || ''} ${act.actorName} 正在${act.type === 'ban' ? '禁用' : '选择'}${act.isMe ? ' ← 轮到你！' : ''}`
-    : `已操作 ${d.completedActions}/${d.totalActions} 手`;
-
-  const isHex = d.mode === 'hextech_aram';
-  if (isHex) {
-    // 海斗：翻牌（只显示我方翻牌区）+ 共享池推荐（英雄选择推荐）+ 版本英雄榜/拍档参考（流程条无禁用）
-    showStage('hex');
-    setFlow('hex', 'flip');
-    // 顶部：你的英雄 · 海斗榜推荐（选中英雄后显眼展示）
-    const st = d.myHeroStat;
-    if (st && d.myHeroId > 0) {
-      setHtml('stHexHeroStat', heroStatHTML(st));
-    } else {
-      setHtml('stHexHeroStat', '<div class="msg">🎴 选定英雄后，这里展示该英雄的推荐海克斯</div>');
-    }
-    $('stHexBoard').innerHTML = d.myTeamBoard.map((p) => hexFlipHTML(p, d)).join('');
-    const pool = d.aramPool || [];
-    $('stHexPool').innerHTML = pool.length
-      ? pool.map(hexPoolCard).join('')
-      : '<div class="msg">🎴 LCU 尚未返回共享英雄池</div>';
-    loadHexRefs();
-    return;
-  }
-  // 排位/匹配：ban 阶段 → 选人阶段（前 10 手为 ban，完成后进入选人）
-  const banTotal = Math.min(10, d.totalActions);
-  if (d.totalActions > 0 && d.completedActions < banTotal) {
-    showStage('ban');
-    setFlow('normal', 'ban');
-    $('stMyBans').innerHTML = banSlotGrid(d.myBans, d);
-    $('stEnemyBans').innerHTML = banSlotGrid(d.enemyBans, d);
-    $('stBans').innerHTML = d.bans.length
-      ? d.bans.map((h) => heroCard(h, { extra: banExtra(h) })).join('')
-      : '<div class="msg">我方选完英雄后自动给出建议</div>';
-    return;
-  }
-  showStage('pick');
-  setFlow('normal', 'pick');
-  const pickDone = Math.max(0, d.completedActions - banTotal);
-  $('stRounds').innerHTML = PICK_ROUNDS.map((r) => {
-    const cls = [r.team];
-    if (pickDone >= r.end) cls.push('done');
-    if (pickDone >= r.start && pickDone < r.end) cls.push('cur');
-    return `<span class="round ${cls.join(' ')}">${r.label}</span>`;
-  }).join('');
-  $('stMyBoard').innerHTML = d.myTeamBoard.map((p) => slotHTML(p, d)).join('');
-  $('stEnemyBoard').innerHTML = d.enemyTeamBoard.map((p) => slotHTML(p, d)).join('');
-  $('stPicks').innerHTML = d.picks.length
-    ? d.picks.map((h) => heroCard(h, { extra: pickExtra(h) })).join('')
-    : '<div class="msg">对面还没选英雄，选完自动刷新</div>';
-}
-
-async function renderLoading(obsolete = () => false) {
-  showStage('loading');
-  $('stPhase').textContent = '🎬 加载画面';
-  $('stMode').textContent = '';
-  $('stTimer').textContent = '';
-  $('stTurn').textContent = '10 名玩家信息 · 进度条满即进入对局';
-  const d = await loadLoading(true);
-  if (obsolete()) return; // 已进入游戏中：流程条交给下一轮
-  // 流程条按模式：ARAM 系无禁用（KIWI 海克斯 / 普通大乱斗）
-  const gm = String(d?.gameMode || '');
-  setFlow(gm === 'KIWI' || gm === 'ARAM' || gm === 'ARAM_GAME' ? 'hex' : 'normal', 'load');
-}
-
-async function renderGame(obsolete = () => false) {
-  showStage('game');
-  $('stPhase').textContent = '🎮 游戏中';
-  $('stMode').textContent = '';
-  $('stTimer').textContent = '';
-  $('stTurn').textContent = '';
-  // 当前对局 10 人表：KIWI 海克斯大乱斗加载阶段就在 InProgress，这里始终可查（失败不打断）
-  let gm = '';
-  try {
-    const d = await api('loading');
-    gm = String(d?.gameMode || '');
-    $('stGamePlayers').innerHTML = d.players && d.players.length
-      ? loadingTableHTML(d)
-      : '<div class="msg">🎬 玩家数据加载中…</div>';
-  } catch { $('stGamePlayers').innerHTML = ''; }
-  // 流程条切到「游戏中」（之前缺失导致流程条残留 pick 高亮）
-  setFlow(gm === 'KIWI' || gm === 'ARAM' || gm === 'ARAM_GAME' ? 'hex' : 'normal', 'game');
-}
-
-/**
- * 阶段渲染主循环：自调度（上一轮完成后才排下一轮，避免网络慢时任务重叠、乱序覆盖——
- * 这是“进入加载阶段还显示 pick”的根因：慢速的旧选人请求在阶段切换后回写 DOM），
- * 每轮以服务端最新阶段为准，渲染完校验阶段未变再落地。
- */
-async function renderStage(force = false) {
-  if (!force && !$('autoRefresh').checked) return;
-  const phase = await lcuStatus();
-  const seq = ++phaseSeq;
-  const obsolete = () => seq < phaseSeq || curPhase !== phase; // 渲染期间阶段已变化 → 丢弃过期结果
-  try {
-    if (phase === 'Lobby') { await renderLobby(obsolete); return; }
-    if (phase === 'Matchmaking') { await renderMatchmaking(obsolete); return; }
-    if (phase === 'ReadyCheck') { await renderReadyCheck(obsolete); return; }
-    if (phase === 'ChampSelect') {
-      try {
-        await renderChampSelect(obsolete);
-      } catch (e) {
-        const msg = String(e?.message ?? '');
-        if (msg.includes('NOT_IN_CHAMPSELECT') && !obsolete()) {
-          // 选人 session 已销毁：选人结束 → 进入加载视图（海斗无 GameStart 阶段，直接 InProgress）
-          await renderLoading(obsolete);
-        } else if (!obsolete()) {
-          await renderIdle();
-        }
-      }
+  async function refresh() {
+    const docked = await invoke('dock_status');
+    if (docked === null) {
+      $('dot').className = 'dot off';
+      $('statusText').textContent = '非 Tauri 环境（浏览器预览）';
       return;
     }
-    if (phase === 'GameStart') { await renderLoading(obsolete); return; }
-    if (phase === 'InProgress') { await renderGame(obsolete); return; }
-    await renderIdle();
-  } catch (e) {
-    // 客户端短暂不可用 → 空闲视图，不打断轮询
-    if (!obsolete()) await renderIdle();
+    $('dot').className = docked ? 'dot on' : 'dot off';
+    $('statusText').textContent = docked ? '跟随中' : '已暂停跟随';
+    $('btnDock').textContent = docked ? '暂停跟随（F10）' : '恢复跟随（F10）';
   }
-}
-function startStage() {
-  let first = true;
-  const loop = async () => {
-    try {
-      await renderStage(first);
-    } catch (e) {
-      // 渲染异常绝不终止轮询（否则阶段永远停住）
-    }
-    first = false;
-    setTimeout(loop, 3000);
-  };
-  loop();
-}
 
-/** 海斗榜英雄推荐卡片（pick 阶段顶部 / 游戏视图共用）：英雄榜数据 + 官方推荐海克斯 + 最佳搭档 */
-function heroStatHTML(st) {
-  const augs = (st.bestAugments || []).map((a) => `<span class="chip" style="background:rgba(214,163,93,.08);border-color:rgba(214,163,93,.4)">🃏 ${esc(a.name_cn)} <b style="color:var(--gold)">${a.winRate.toFixed(1)}%</b></span>`).join('') || '<span class="sub">榜内暂无推荐牌</span>';
-  const partners = (st.bestPartners || []).map((p) => `<span class="chip">🤝 ${esc(p.title)} ${p.winRate.toFixed(1)}%</span>`).join('') || '';
-  return `<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">
-    <img src="${heroImg(st.alias || '')}" style="width:46px;height:46px;border-radius:10px;border:2px solid var(--gold)" onerror="this.style.visibility='hidden'">
-    <span style="font-size:18px;font-weight:700;color:var(--gold)">${esc(st.title)}</span>
-    <span class="sub">海斗榜 #${st.rank} · 胜率 <b style="color:var(--green)">${st.winRate.toFixed(2)}%</b> · 登场 ${st.pickRate.toFixed(2)}%</span>
-  </div>
-  <div style="margin-top:8px;font-size:12px;color:var(--dim)">🃏 推荐海克斯（持有胜率）:</div>
-  <div class="chips" style="margin-top:6px">${augs}</div>
-  ${partners ? `<div style="margin-top:8px;font-size:12px;color:var(--dim)">🤝 最佳搭档 <span class="sub">与该英雄同队时的组合胜率</span>:</div><div class="chips" style="margin-top:6px">${partners}</div>` : ''}`;
-}
-
-/** 海斗拍档卡片（翻牌阶段参考） */
-function partnerCardHTML(p) {
-  return `<div class="hero-card">
-    <span class="rank">${p.winRate.toFixed(1)}%</span>
-    <div style="display:flex;justify-content:center;gap:6px;align-items:center">
-      <img src="${heroImg(p.heroAlias)}" style="width:40px;height:40px;border-radius:8px;object-fit:cover" onerror="this.style.visibility='hidden'">
-      <span style="color:var(--gold)">＋</span>
-      <img src="${heroImg(p.partnerAlias)}" style="width:40px;height:40px;border-radius:8px;object-fit:cover" onerror="this.style.visibility='hidden'">
-    </div>
-    <div class="name">${esc(p.heroTitle)} + ${esc(p.partnerTitle)}</div>
-    <div class="win ${winCls(p.winRate)}">${p.winRate.toFixed(2)}%</div>
-    <div class="counters">组合登场 ${p.pickRate.toFixed(2)}%</div>
-  </div>`;
-}
-
-/* ---------- 海克斯选牌推荐（Web 直接展示：自动按我方阵容评级 + 官方牌榜） ---------- */
-/* ---------- 海斗翻牌阶段参考：版本英雄榜 + 最佳拍档（10 分钟节流） ---------- */
-let hexRefTs = 0;
-function loadHexRefs(force = false) {
-  const now = Date.now();
-  if (!force && hexRefTs && now - hexRefTs < 600000) return;
-  hexRefTs = now;
-  Promise.all([
-    api('hex/heroes', { top: 8 }).catch(() => null),
-    api('hex/partners', { top: 8 }).catch(() => null),
-  ]).then(([heroes, partners]) => {
-    $('stHexRefHeroes').innerHTML = heroes
-      ? heroes.map((h) => `<div class="hero-card">
-        <span class="rank">#${h.rank}</span>
-        <img src="${heroImg(h.alias)}" onerror="this.style.visibility='hidden'">
-        <div class="name">${esc(h.title)}</div>
-        <div class="win ${winCls(h.winRate)}">${h.winRate.toFixed(2)}%</div>
-        <div class="counters">登场 ${h.pickRate.toFixed(2)}%</div>
-        ${h.bestAugments.length ? `<div class="counters" style="color:var(--gold)">🃏 ${h.bestAugments.slice(0, 2).map((a) => esc(a.name_cn)).join('、')}</div>` : ''}
-      </div>`).join('')
-      : '<div class="msg">加载失败</div>';
-    $('stHexRefPartners').innerHTML = partners
-      ? partners.map(partnerCardHTML).join('')
-      : '<div class="msg">加载失败</div>';
+  $('btnArrange').addEventListener('click', () => invoke('arrange_windows'));
+  $('btnDock').addEventListener('click', async () => {
+    const cur = await invoke('dock_status');
+    await invoke('set_docked', { enabled: !cur });
+    refresh();
   });
-}
 
-/* ---------- 加载画面（并入对局流程视图） ---------- */
-/** 10 人加载表格（普通模式/KIWI 共用；大乱斗无段位列，全部带近期战绩） */
-function loadingTableHTML(d) {
-  const teams = [100, 200];
-  const phaseTxt = d.phase === 'InProgress' ? '游戏中' : '加载中';
-  // 近期战绩按当前模式族取；加载阶段保持单列，避免 400px 面板横向滚动。
-  const recentCell = (p) => {
-    const r = p.recents;
-    if (!r) return '<span class="sub">—</span>';
-    const x = d.aramLike ? r.hextech : r.ranked;
-    if (x && x.totalGames > 0) {
-      const cls = x.score >= 60 ? 'var(--green)' : x.score >= 50 ? 'var(--gold)' : 'var(--red)';
-      return `<span class="player-recent">${x.totalGames}场 · ${x.winRate.toFixed(0)}% · KDA ${x.kda} · <b style="color:${cls}">${x.score}分</b></span>`;
-    }
-    return `<span class="player-recent">${r.overallLastDays !== null && r.overallLastDays !== undefined ? `上次 ${r.overallLastDays} 天前` : '近15天无战绩'}</span>`;
-  };
-  const playerRow = (p, team) => {
-    const avatar = p.isBot
-      ? '<span class="player-avatar">BOT</span>'
-      : `<span class="player-avatar"><img src="${heroImg(p.alias)}" onerror="this.style.visibility='hidden'"></span>`;
-    const rank = d.aramLike ? '' : `<span class="player-rank">${esc(p.rank || '未定级')}</span>`;
-    return `<div class="player-row ${team === 100 ? 'blue' : 'red'} ${p.isMe ? 'self' : ''}">
-      ${avatar}
-      <div class="player-main">
-        <div class="player-name">${esc(p.summonerName)}${p.isMe ? ' · 我' : ''}${p.isBot ? ' · 人机' : ''}</div>
-        <div class="player-hero">${esc(p.title)} · ${esc(p.position || '位置未知')} · Lv.${p.summonerLevel || '-'}</div>
-      </div>
-      <div class="player-meta">${rank}${p.isBot ? '<span class="player-recent">无需战绩</span>' : recentCell(p)}</div>
-    </div>`;
-  };
-  return `<div class="sub" style="margin-bottom:8px">${esc(d.gameMode)} · ${phaseTxt}${d.aramLike ? ' · 大乱斗无段位' : ''} · 实时同步</div>` +
-    teams.map((team, ti) => {
-      const ps = d.players.filter((p) => p.teamId === team);
-      if (!ps.length) return '';
-      return `<div class="team-header ${ti === 0 ? 'blue' : 'red'}">${ti === 0 ? '🔵 我方' : '🔴 对面'} <span class="sub">${ps.length} 人</span></div>
-        <div class="player-list">${ps.map((p) => playerRow(p, team)).join('')}</div>`;
-    }).join('');
-}
-
-async function loadLoading(force = false) {
-  if (!force && !$('autoRefresh').checked) return;
-  try {
-    const d = await api('loading');
-    $('stLoadMsg').classList.add('hidden');
-    $('stLoadingBody').classList.remove('hidden');
-    $('stLoadingBody').innerHTML = d.players && d.players.length
-      ? loadingTableHTML(d)
-      : '<div class="msg">🎬 游戏客户端启动中 — 玩家数据就绪后自动显示（含 KIWI 海克斯大乱斗 10 人）</div>';
-    return d;
-  } catch (e) {
-    $('stLoadMsg').textContent = e.message === 'NOT_IN_GAME' ? '⏳ 不在对局中' : '❌ ' + e.message;
-    $('stLoadMsg').classList.remove('hidden');
-    $('stLoadingBody').classList.add('hidden');
-    return null;
-  }
-}
-
-/* ---------- 逐场战绩明细（房间/加载共用） ---------- */
-function recentDetailHTML(r) {
-  const fmt = (n) => (n || 0).toLocaleString();
-  const dur = r.duration > 0 ? `${Math.floor(r.duration / 60)}分${String(r.duration % 60).padStart(2, '0')}秒` : '';
-  const days = Math.max(0, Math.floor((Date.now() - r.gameCreation) / 86400000));
-  const items = (r.items || []).map((id) =>
-    `<img src="https://game.gtimg.cn/images/lol/act/img/item/${id}.png" class="item-ic" onerror="this.style.visibility='hidden'" title="装备 ${id}">`).join('');
-  const players = r.players && r.players.length
-    ? `<div class="mp-wrap">${[100, 200].map((t) => `
-        <div class="mp-side ${t === 100 ? 'blue' : 'red'}">
-          <div class="mp-label">${t === 100 ? '🔵 我方' : '🔴 对方'}</div>
-          ${r.players.filter((p) => p.teamId === t).map((p) => `
-          <div class="mp-row ${p.isSelf ? 'self' : ''}">
-            <img class="mp-ic" src="${heroImg(p.alias)}" onerror="this.style.visibility='hidden'">
-            <div class="mp-info">
-              <div class="mp-name">${esc(p.summonerName)}${p.isSelf ? ' <span class="mp-me">我</span>' : ''}</div>
-              <div class="mp-sub">⚔ ${p.kills}/${p.deaths}/${p.assists} · 💥 ${fmt(p.dmg)}</div>
-              ${p.augNames && p.augNames.length ? `<div class="mp-sub" style="color:var(--gold)">🃏 ${p.augNames.map(esc).join('、')}</div>` : ''}
-            </div>
-            <div class="mp-items">${p.items.slice(0, 6).map((id) =>
-              `<img src="https://game.gtimg.cn/images/lol/act/img/item/${id}.png" onerror="this.style.visibility='hidden'" title="装备 ${id}">`).join('')}</div>
-          </div>`).join('')}
-        </div>`).join('')}
-      </div>`
-    : (r.players === null
-      ? '<div class="msg" style="margin-top:8px;font-size:11px">ℹ️ 该对局非你参与，LCU 仅提供本人数据（无同场 10 人详情）</div>'
-      : '');
-  return `<div class="recent-detail">
-    <div class="rd-line">${esc(r.modeLabel || '')}${dur ? ` · ${dur}` : ''}${r.level ? ` · ${r.level} 级` : ''} · ${days} 天前</div>
-    ${r.augNames && r.augNames.length ? `<div class="rd-line" style="color:var(--gold)">🃏 海克斯: ${r.augNames.map(esc).join('、')}</div>` : ''}
-    <div class="rd-line">⚔ ${r.kills}/${r.deaths}/${r.assists} · 补刀 ${r.cs ?? 0} · 金币 ${fmt(r.gold)} · 视野 ${r.vision ?? 0} · 💥 伤害 ${fmt(r.dmg)} · 🛡 承伤 ${fmt(r.taken)}</div>
-    ${items ? `<div class="rd-items">${items}</div>` : ''}
-    ${players}
-  </div>`;
-}
-function recentRow(r) {
-  const t = new Date(r.gameCreation).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-  const dur = r.duration > 0 ? `${Math.floor(r.duration / 60)}分` : '';
-  return `<details class="recent-row ${r.win ? 'win' : 'lose'}">
-    <summary class="recent-summary">
-      <span class="rt">${t}</span>
-      <span class="rm">${esc(r.modeLabel || '')}</span>
-      <img class="ri" src="${heroImg(r.alias)}" onerror="this.style.visibility='hidden'">
-      <span class="rh">${esc(r.title)}</span>
-      <span class="rk">${r.kills}/${r.deaths}/${r.assists}</span>
-      <span class="rd">${dur}</span>
-      <span class="rr">${r.win ? '✓ 胜' : '✗ 负'}</span>
-    </summary>
-    ${recentDetailHTML(r)}
-  </details>`;
-}
-function recentPanelHTML(name, stats, recent, refreshBtn = '', byType = null, modeLabel = '', firstType = '', showTypeEval = true, modeHint = '') {
-  const games = recent.length;
-  const order = typeOrder(firstType);
-  const typeLine = (label, x, lastDays) => x
-    ? `${label} ${x.totalGames}场 ${x.winRate}% KDA ${x.kda} · ${x.verdict}`
-    : `${label} ${lastDays !== null ? `上次 ${lastDays} 天前` : '近15天无记录'}`;
-  const typeEval = byType
-    ? `<div class="type-eval">${order.map(([k, l]) => `<div>${typeLine(l, byType[k], byType[k + 'LastDays'])}</div>`).join('')}</div>`
-    : '';
-  const hint = stats
-    ? `${modeLabel ? `${esc(modeLabel)} · ` : ''}${stats.verdict} ${stats.winRate}% · KDA ${stats.kda} · 点击卡片切换${refreshBtn ? ` · ${refreshBtn}` : ''}`
-    : `${modeLabel ? `${esc(modeLabel)} · ` : ''}${modeHint ? `近15天 · ${modeHint}共${games}场记录` : '近15天 · 排位/海斗各20场'} · 点击卡片切换${refreshBtn ? ` · ${refreshBtn}` : ''}`;
-  // 逐场明细：当前房间类型在前、另一类型在后（组内按时间倒序；好友已按页签模式过滤，天然同类）
-  const fam = firstType === 'ranked' || firstType === 'hextech' ? firstType : '';
-  const list = fam
-    ? [...recent].sort((a, b) => {
-        const af = queueFamilyOf(a.queueId);
-        const bf = queueFamilyOf(b.queueId);
-        if (af === bf) return b.gameCreation - a.gameCreation;
-        if (af === fam) return -1;
-        if (bf === fam) return 1;
-        return b.gameCreation - a.gameCreation;
-      })
-    : recent;
-  return `<h3>📋 ${esc(name)} ${modeLabel ? `${esc(modeLabel)} ` : ''}近期战绩 <span class="hint">${hint}</span></h3>`
-    + (showTypeEval ? typeEval : '')
-    + (games
-      ? `<div class="recent-list">${list.map(recentRow).join('')}</div>`
-      : '<div class="msg">近期无战绩数据</div>');
-}
-
-/**
- * 明细懒加载（房间共用）：
- * - 会话内缓存 60s：重复点选不重复请求，直接渲染
- * - in-flight 去重：同一目标的并发请求只发一次
- * - 竞态保护：返回后校验当前选中项，避免快速切换时旧数据覆盖新面板
- * - force=true 强制重新查询（面板上的刷新按钮）
- */
-const recentPanelCache = new Map();    // key -> { ts, html }
-const recentPanelInflight = new Map(); // key -> Promise<html>
-const RECENT_PANEL_TTL_MS = 60_000;
-
-/** 清掉满足条件的逐场明细缓存（战绩更新后防止旧缓存复用） */
-function clearRecentCache(pred) {
-  for (const k of recentPanelCache.keys()) if (pred(k)) recentPanelCache.delete(k);
-}
-async function loadRecentPanel({ key, id, name, queueId = '', modeLabel = '', force = false }) {
-  const target = $('stRecent');
-  const selAtCall = selMemberId;
-  const hit = recentPanelCache.get(key);
-  if (!force && hit && Date.now() - hit.ts < RECENT_PANEL_TTL_MS) {
-    if (selAtCall === selMemberId) target.innerHTML = hit.html;
-    return;
-  }
-  target.innerHTML = `<h3>📋 ${esc(name)} 近期战绩 <span class="hint">查询中…</span></h3>`;
-  let p = recentPanelInflight.get(key);
-  if (!p) {
-    p = (async () => {
-      const d = await api('player-recent', { summonerId: id, queueId: queueId || '' });
-      const btn = '<button class="mini" onclick="refreshMemberRecent()">🔄 刷新</button>';
-      const html = recentPanelHTML(name, d.stats, d.recent || [], btn, d.byType, modeLabel, queueFamilyOf(Number(queueId) || 0), true);
-      recentPanelCache.set(key, { ts: Date.now(), html });
-      return html;
-    })().finally(() => recentPanelInflight.delete(key));
-    recentPanelInflight.set(key, p);
-  }
-  try {
-    const html = await p;
-    if (selAtCall === selMemberId) target.innerHTML = html;
-  } catch (e) {
-    if (selAtCall === selMemberId) {
-      target.innerHTML = `<h3>📋 ${esc(name)} 近期战绩</h3><div class="msg">❌ ${esc(e.message)}</div>`;
-    }
-  }
-}
-/* ---------- init ---------- */
-startStage();
-
-/* ===== 侧边停靠面板（Tauri 壳） ===== */
-const SIDE_TAURI = window.__TAURI__;
-const run = (p) => Promise.resolve(p).catch(() => {});
-// 非 Tauri 环境（浏览器直开）下隐藏面板按钮
-if (!SIDE_TAURI) {
-  const pt = document.querySelector('.panel-tools');
-  if (pt) pt.remove();
-}
-// 顶部条拖拽移动（无边框窗口）：按住非按钮/输入区拖动
-const topbar = document.querySelector('.topbar');
-if (topbar) {
-  topbar.addEventListener('mousedown', (e) => {
-    if (e.target.closest('button, input, label')) return;
-    if (SIDE_TAURI) run(SIDE_TAURI.window.getCurrentWindow().startDragging());
-  });
-}
-if (SIDE_TAURI) {
-  const $b = (id) => document.getElementById(id);
-  const dockBtn = $b('panelDock');
-  let docked = true;
-  const syncDock = () => { if (dockBtn) dockBtn.classList.toggle('on', docked); };
-  run(SIDE_TAURI.core.invoke('dock_status').then((v) => { docked = !!v; syncDock(); }));
-  const on = (id, fn) => { const el = $b(id); if (el) el.onclick = () => run(fn()); };
-  on('panelArrange', () => SIDE_TAURI.core.invoke('arrange_windows'));
-  on('panelDock', () => SIDE_TAURI.core.invoke('set_docked', { enabled: !docked }).then((v) => { docked = !!v; syncDock(); }));
-  on('panelRefresh', () => location.reload());
-  on('panelClose', () => SIDE_TAURI.window.getCurrentWindow().close());
-  syncDock();
-}
+  refresh();
 </script>
 </body>
 </html>

@@ -3,9 +3,6 @@
   "identifier": "default",
   "description": "T101 面板默认权限：窗口控制 + 自定义命令",
   "windows": ["main"],
-  "remote": {
-    "urls": ["http://127.0.0.1:7892/*"]
-  },
   "permissions": [
     "core:default",
     "core:window:allow-close",
