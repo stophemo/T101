@@ -1,0 +1,56 @@
+# Windows 构建 + Sigstore 无密钥签名（cosign）
+# 在 GitHub 的 Windows runner 上构建，不依赖本地机器。
+# 手动触发：Actions → build-sign → Run workflow（默认 main 分支）
+name: build-sign
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  # OIDC 令牌，用于 cosign 无密钥签名（不持有任何私钥）
+  id-token: write
+
+jobs:
+  build-and-sign:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Tauri (release, no bundle)
+        run: npm run panel:build
+
+      - uses: sigstore/cosign-installer@v4
+
+      - name: Sign with Sigstore (keyless)
+        shell: pwsh
+        run: |
+          $exe = "desktop/src-tauri/target/release/t101-panel.exe"
+          cosign sign-blob --yes `
+            --output-signature "$exe.sig" `
+            --output-certificate "$exe.pem" `
+            $exe
+
+      - name: Upload signed artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: t101-panel-signed
+          path: |
+            desktop/src-tauri/target/release/t101-panel.exe
+            desktop/src-tauri/target/release/t101-panel.exe.sig
+            desktop/src-tauri/target/release/t101-panel.exe.pem
