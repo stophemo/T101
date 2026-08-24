@@ -11,8 +11,6 @@
     "panel": "tsx src/cli.ts panel",
     "panel:build": "cd desktop && npx tauri build --no-bundle",
     "panel:bundle": "cd desktop && npx tauri build --bundles nsis",
-    "panel:sign": "powershell -ExecutionPolicy Bypass -File scripts/sign-windows.ps1",
-    "panel:verify": "powershell -ExecutionPolicy Bypass -File scripts/sign-windows.ps1 -Verify -Identity https://github.com/stophemo/T101/.github/workflows/build-sign.yml@refs/heads/master",
     "test": "node --import tsx --test tests/*.test.ts"
   },
   "dependencies": {

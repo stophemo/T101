@@ -72,7 +72,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: T101 ${{ github.ref_name }}
-          body_path: RELEASE_NOTES.md
+          generate_release_notes: true
           fail_on_unmatched_globs: true
           files: |
             desktop/src-tauri/target/release/t101-panel.exe

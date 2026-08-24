@@ -1,6 +1,6 @@
 # T101
 
-T101 是一款面向英雄联盟国服的 数据分析助手：窗口自动贴靠 LOL 客户端或游戏窗口右侧，不抢占焦点、不改变目标窗口层级，配合对局数据分析，帮助你在不离开游戏的前提下完成 BP 等决策。
+T101 是一款面向英雄联盟国服的 数据分析助手
 
 > 仅分析对局数据与本地界面展示，不执行任何游戏内自动化操作。
 
@@ -38,15 +38,13 @@ npm run panel         # 启动面板
 
 构建产物通过 **Sigstore 无密钥签名**（cosign，开源免费、无需私钥）保证供应链完整性：
 
-- **CI 构建签名**：在 GitHub 仓库 Actions 中手动触发 `build-sign` 工作流（Windows runner），产物为 `t101-panel.exe` 及配套 `.sig` 签名、`.pem` 证书。
-- **本地构建签名**（Windows 上）：先 `npm run panel:build`，再 `npm run panel:sign`。
+- **CI 构建签名**：推 tag（`v*`）或手动触发 `build-sign` 工作流（Windows runner），产物为 `t101-panel.exe` 与 NSIS 安装包 `t101-panel_<版本>_x64-setup.exe`，均附带 `.sigstore.json` 签名 bundle，自动发布到 GitHub Release。
+- **发布说明**：在 GitHub Release 页面编写，仓库内不维护发布记录文件。
 
-校验 CI 产物：
+校验 Release 产物：
 
 ```powershell
-npm run panel:verify
-# 等价于：
-cosign verify-blob --certificate t101-panel.exe.pem --signature t101-panel.exe.sig `
+cosign verify-blob --bundle t101-panel.exe.sigstore.json `
   --certificate-identity "https://github.com/stophemo/T101/.github/workflows/build-sign.yml@refs/heads/master" `
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" `
   t101-panel.exe
@@ -56,7 +54,7 @@ cosign verify-blob --certificate t101-panel.exe.pem --signature t101-panel.exe.s
 
 ## 已知限制
 
-- 仅支持 Windows，暂无安装包与自动更新。
+- 仅支持 Windows；无自动更新。
 - 游戏独占全屏时普通窗口无法稳定覆盖，建议使用无边框或窗口化模式。
 
 ## 免责声明
