@@ -1,6 +1,6 @@
 [package]
 name = "t101-panel"
-version = "0.0.1"
+version = "0.0.2"
 description = "T101 对局助手 · 侧边停靠面板（Tauri 壳）"
 edition = "2021"
 

@@ -1,6 +1,6 @@
 {
   "name": "T101",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "对局数据与 BP 分析终端工具（数据源：101.qq.com 官方）",
   "type": "module",
   "bin": {

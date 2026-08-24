@@ -1,3 +1,15 @@
+# T101 0.0.2
+
+构建产物签名与仓库元信息更新。
+
+## 本版内容
+
+- 新增 Sigstore 无密钥签名（cosign）：GitHub Actions `build-sign` 工作流在 Windows runner 上构建并签名，产物附带 `.sig` 签名与 `.pem` 证书，可通过 `npm run panel:verify` 校验供应链完整性。
+- 新增本地签名脚本 `scripts/sign-windows.ps1` 与 `npm run panel:sign`。
+- 说明：Sigstore 签名不改变 Windows SmartScreen 行为，首次运行仍可能提示未知发布者。
+
+---
+
 # T101 0.0.1
 
 首个公开版本，面向英雄联盟国服提供 Windows Tauri 侧边停靠面板。
