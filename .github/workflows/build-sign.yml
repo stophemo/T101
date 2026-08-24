@@ -46,7 +46,7 @@ jobs:
       # ---------- 1. 优先 Azure Trusted Signing ----------
       - name: Sign exe with Azure Trusted Signing
         if: ${{ secrets.AZURE_TENANT_ID != '' }}
-        uses: Azure/trusted-signing-action@v0
+        uses: Azure/trusted-signing-action@v0.5.11
         with:
           endpoint: ${{ secrets.T101_SIGNING_ENDPOINT }}
           trusted-signing-account-name: ${{ secrets.T101_SIGNING_ACCOUNT }}
@@ -89,7 +89,7 @@ jobs:
 
       - name: Sign NSIS installer (Azure Trusted Signing)
         if: ${{ secrets.AZURE_TENANT_ID != '' }}
-        uses: Azure/trusted-signing-action@v0
+        uses: Azure/trusted-signing-action@v0.5.11
         with:
           endpoint: ${{ secrets.T101_SIGNING_ENDPOINT }}
           trusted-signing-account-name: ${{ secrets.T101_SIGNING_ACCOUNT }}
