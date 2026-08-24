@@ -47,7 +47,7 @@ npm run panel         # 启动面板
 npm run panel:verify
 # 等价于：
 cosign verify-blob --certificate t101-panel.exe.pem --signature t101-panel.exe.sig `
-  --certificate-identity "https://github.com/stophemo/T101/.github/workflows/build-sign.yml@refs/heads/main" `
+  --certificate-identity "https://github.com/stophemo/T101/.github/workflows/build-sign.yml@refs/heads/master" `
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" `
   t101-panel.exe
 ```
