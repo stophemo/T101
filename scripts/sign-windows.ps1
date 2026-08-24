@@ -42,10 +42,10 @@ if ($Verify) {
     $Exe
 } else {
   & $cosign sign-blob --yes `
-    --output-signature "$Exe.sig" `
-    --output-certificate "$Exe.pem" `
+    --output-signature "$($Exe).sig" `
+    --output-certificate "$($Exe).pem" `
     $Exe
   Write-Host "已生成："
-  Write-Host "  $Exe.sig"
-  Write-Host "  $Exe.pem"
+  Write-Host "  $($Exe).sig"
+  Write-Host "  $($Exe).pem"
 }

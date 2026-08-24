@@ -42,8 +42,8 @@ jobs:
         run: |
           $exe = "desktop/src-tauri/target/release/t101-panel.exe"
           cosign sign-blob --yes `
-            --output-signature "$exe.sig" `
-            --output-certificate "$exe.pem" `
+            --output-signature "$($exe).sig" `
+            --output-certificate "$($exe).pem" `
             $exe
 
       - name: Upload signed artifact
